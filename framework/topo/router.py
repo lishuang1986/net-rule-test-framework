@@ -21,11 +21,19 @@ class RouterTopo(ABC):
 
     class Router(ABC):
         @abstractmethod
-        def get_ip_to_client(self) -> str:
+        def get_ipv4_to_client(self) -> str:
             pass
 
         @abstractmethod
-        def get_ip_to_server(self) -> str:
+        def get_ipv4_to_server(self) -> str:
+            pass
+
+        @abstractmethod
+        def get_ipv6_to_client(self) -> str:
+            pass
+
+        @abstractmethod
+        def get_ipv6_to_server(self) -> str:
             pass
 
         @abstractmethod

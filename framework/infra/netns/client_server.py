@@ -79,7 +79,14 @@ class NetnsClientServerInfra(ClientServerTopo, BaseInfra):
         subprocess.run(f"ip netns exec {server_ns} ip link set {server_iface} up", shell=True, check=True)
         subprocess.run(f"ip netns exec {server_ns} ip link set lo up", shell=True, check=True)
 
+        self._health_check()
         return self._logical_to_physical.copy()
+
+    def _health_check(self):
+        self.Client._wait_for_ipv6_dad()
+        self.Server._wait_for_ipv6_dad()
+        self.Client.run(f"ping -c 1 -W 1 {self.Server.get_ipv4()}")
+        self.Client.run(f"ping -c 1 -W 1 {self.Server.get_ipv6()}")
 
     def cleanup(self):
         for veth, peer in self.veths:

@@ -213,3 +213,6 @@ report.html
 # Claude + DeepSeek
 *.bak
 *.bak2
+
+# Aider
+.aider*

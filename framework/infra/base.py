@@ -2,6 +2,7 @@
 # Copyright (c) 2026 Li Shuang
 from abc import ABC, abstractmethod
 import subprocess
+import time
 from typing import Dict
 
 
@@ -20,7 +21,7 @@ class BaseInfra(ABC):
     @abstractmethod
     def cleanup(self):
         pass
-    
+
     def _execute(self, cmd: str, tag: str = ""):
         if self.__class__.verbose:
             if tag:
@@ -74,6 +75,20 @@ class NetnsNode:
         result = self._executor._execute(full_cmd, tag=self._tag)
         return self._executor._check_result(result, cmd, check, expect)
 
+    def _wait_for_ipv6_dad(self, timeout: float = 3.0) -> bool:
+        """Wait for IPv6 DAD to complete inside this node's netns."""
+        physical_ns = self._executor._logical_to_physical[self._name]
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            ret = subprocess.run(
+                f"ip netns exec {physical_ns} ip -6 addr show tentative 2>/dev/null | grep -c tentative",
+                shell=True, capture_output=True, text=True)
+            count = ret.stdout.strip()
+            if count == "" or int(count) == 0:
+                return True
+            time.sleep(0.2)
+        return False
+
 
 class VrfNode:
     """Base class for VRF nodes, executes commands via ip vrf exec"""
@@ -89,6 +104,19 @@ class VrfNode:
         result = self._executor._execute(full_cmd, tag=self._tag)
         return self._executor._check_result(result, cmd, check, expect)
 
+    def _wait_for_ipv6_dad(self, timeout: float = 3.0) -> bool:
+        """Wait for IPv6 DAD to complete (VRF interfaces are on host)."""
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            ret = subprocess.run(
+                "ip -6 addr show tentative 2>/dev/null | grep -c tentative",
+                shell=True, capture_output=True, text=True)
+            count = ret.stdout.strip()
+            if count == "" or int(count) == 0:
+                return True
+            time.sleep(0.2)
+        return False
+
 
 class HostNode:
     """Base class for local host nodes, executes commands directly (no netns)"""
@@ -101,3 +129,16 @@ class HostNode:
         # Execute directly, no prefix added
         result = self._executor._execute(cmd, tag=self._tag)
         return self._executor._check_result(result, cmd, check, expect)
+
+    def _wait_for_ipv6_dad(self, timeout: float = 3.0) -> bool:
+        """Wait for IPv6 DAD to complete on the host."""
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            ret = subprocess.run(
+                "ip -6 addr show tentative 2>/dev/null | grep -c tentative",
+                shell=True, capture_output=True, text=True)
+            count = ret.stdout.strip()
+            if count == "" or int(count) == 0:
+                return True
+            time.sleep(0.2)
+        return False

@@ -29,11 +29,17 @@ class VrfRouterInfra(RouterTopo, BaseInfra):
             self._name = "router"
             VrfNode.__init__(self, executor, self._name, "Router")
 
-        def get_ip_to_client(self) -> str:
+        def get_ipv4_to_client(self) -> str:
             return "10.0.1.1"
 
-        def get_ip_to_server(self) -> str:
+        def get_ipv4_to_server(self) -> str:
             return "10.0.2.1"
+
+        def get_ipv6_to_client(self) -> str:
+            return "2001:db8:1::1"
+
+        def get_ipv6_to_server(self) -> str:
+            return "2001:db8:2::1"
 
         def get_iface_to_client(self) -> str:
             return "veth_rc"
@@ -109,24 +115,39 @@ class VrfRouterInfra(RouterTopo, BaseInfra):
 
         # Configure IP
         subprocess.run(f"ip addr add {self.Client.get_ipv4()}/24 dev {self.Client.get_iface()}", shell=True, check=True)
-        subprocess.run(f"ip addr add {self.Router.get_ip_to_client()}/24 dev {self.Router.get_iface_to_client()}", shell=True, check=True)
-        subprocess.run(f"ip addr add {self.Router.get_ip_to_server()}/24 dev {self.Router.get_iface_to_server()}", shell=True, check=True)
+        subprocess.run(f"ip -6 addr add {self.Client.get_ipv6()}/64 dev {self.Client.get_iface()}", shell=True, check=True)
+        subprocess.run(f"ip addr add {self.Router.get_ipv4_to_client()}/24 dev {self.Router.get_iface_to_client()}", shell=True, check=True)
+        subprocess.run(f"ip -6 addr add {self.Router.get_ipv6_to_client()}/64 dev {self.Router.get_iface_to_client()}", shell=True, check=True)
+        subprocess.run(f"ip addr add {self.Router.get_ipv4_to_server()}/24 dev {self.Router.get_iface_to_server()}", shell=True, check=True)
+        subprocess.run(f"ip -6 addr add {self.Router.get_ipv6_to_server()}/64 dev {self.Router.get_iface_to_server()}", shell=True, check=True)
         subprocess.run(f"ip addr add {self.Server.get_ipv4()}/24 dev {self.Server.get_iface()}", shell=True, check=True)
+        subprocess.run(f"ip -6 addr add {self.Server.get_ipv6()}/64 dev {self.Server.get_iface()}", shell=True, check=True)
 
         # Enable IP forwarding on router
         subprocess.run(f"ip vrf exec {router_vrf} sysctl -w net.ipv4.ip_forward=1", shell=True, check=True)
+        subprocess.run(f"ip vrf exec {router_vrf} sysctl -w net.ipv6.conf.all.forwarding=1", shell=True, check=True)
 
         # Add default routes
         client_table = self._logical_to_table[client_name]
         server_table = self._logical_to_table[server_name]
-        subprocess.run(f"ip route add default via {self.Router.get_ip_to_client()} dev {self.Client.get_iface()} table {client_table}", shell=True, check=True)
-        subprocess.run(f"ip route add default via {self.Router.get_ip_to_server()} dev {self.Server.get_iface()} table {server_table}", shell=True, check=True)
+        subprocess.run(f"ip route add default via {self.Router.get_ipv4_to_client()} dev {self.Client.get_iface()} table {client_table}", shell=True, check=True)
+        subprocess.run(f"ip route add default via {self.Router.get_ipv4_to_server()} dev {self.Server.get_iface()} table {server_table}", shell=True, check=True)
+        subprocess.run(f"ip -6 route add default via {self.Router.get_ipv6_to_client()} dev {self.Client.get_iface()} table {client_table}", shell=True, check=True)
+        subprocess.run(f"ip -6 route add default via {self.Router.get_ipv6_to_server()} dev {self.Server.get_iface()} table {server_table}", shell=True, check=True)
 
         self.veths.extend([(self.Client.get_iface(), self.Router.get_iface_to_client()),
                            (self.Router.get_iface_to_server(), self.Server.get_iface())])
 
+        self._health_check()
         return self._logical_to_physical.copy()
-    
+
+    def _health_check(self):
+        self.Client._wait_for_ipv6_dad()
+        self.Router._wait_for_ipv6_dad()
+        self.Server._wait_for_ipv6_dad()
+        self.Client.run(f"ping -c 1 -W 1 {self.Server.get_ipv4()}")
+        self.Client.run(f"ping -c 1 -W 1 {self.Server.get_ipv6()}")
+
     def cleanup(self):
         for veth, peer in self.veths:
             subprocess.run(f"ip link del {veth}", shell=True, stderr=subprocess.DEVNULL)

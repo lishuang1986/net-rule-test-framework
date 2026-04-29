@@ -26,6 +26,9 @@ pytest --infra=netns
 # Run tests with VRF (experimental)
 pytest --infra=vrf
 
+# Run all tests with verbose output and generate an HTML report
+pytest tests -vv --html=report.html
+
 # Run only netfilter tests
 pytest tests/netfilter/ --infra=netns
 

@@ -27,7 +27,7 @@ def test_tc_delay_on_router(router_env):
     iface = infra.Router.get_iface_to_server()
     infra.Router.run(f"tc qdisc add dev {iface} root netem delay 100ms")
     
-    result = infra.Client.run(f"ping -c 5 -W 2 {infra.Server.get_ipv4()}", expect='failed')
+    result = infra.Client.run(f"ping -c 5 -W 2 {infra.Server.get_ipv4()}")
     
     avg_rtt = get_avg_rtt(result.stdout)
     if avg_rtt > 0:
