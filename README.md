@@ -11,6 +11,7 @@ The provided examples illustrate usage with **Netfilter/iptables** and **TC**. T
 Supported backends:
 - Netns (network namespaces)
 - VRF (Virtual Routing and Forwarding) – **experimental**
+- Libvirt VMs (Fedora/RHEL/CentOS based) – **experimental**
 
 ## Quick Start
 
@@ -34,7 +35,41 @@ pytest tests/netfilter/ --infra=netns
 
 # Run only TC u32 match test
 pytest tests/tc/test_u32_match.py -vv
+
+# Run RoCEv2 tests with libvirt infra (requires rdma-core and perftest installed)
+pytest tests/rocev2/test_rocev2.py --infra=libvirt -vv
+# Note: netns infra currently does not support RoCEv2 tests
+
+# Run tests with Libvirt VMs (requires Fedora image prepared)
+pytest --infra=libvirt
 ```
+
+### Libvirt VM Environment Setup
+
+Currently supports **Fedora/RHEL/CentOS** based VMs.
+
+**Required pre-step (user action):**
+1. Install system packages:
+   ```bash
+   sudo dnf install -y qemu-kvm libvirt virt-install libguestfs-tools wget sshpass
+   sudo systemctl enable --now libvirtd
+   ```
+
+2. Download a Fedora Cloud image (example uses Fedora 44) and save as `fedora.qcow2`:
+   ```bash
+   cd /var/lib/libvirt/images
+   # Example: Fedora 44 Cloud image
+   sudo wget https://download.fedoraproject.org/pub/fedora/linux/releases/44/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-44-1.7.x86_64.qcow2
+   sudo mv Fedora-Cloud-Base-Generic-44-1.7.x86_64.qcow2 fedora.qcow2
+   # You can use other Fedora versions or compatible images
+   ```
+
+That's it! The framework will automatically:
+- Customize the image (set root password, enable SSH, install RDMA packages if needed)
+- Create VM disks and start VMs
+- Configure the environment for testing
+
+**Note:** The image customization (`virt-customize`) runs only **once**. A marker file `.customized` will be created to skip future customizations.
 
 ## Extensibility
 

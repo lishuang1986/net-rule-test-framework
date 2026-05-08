@@ -5,7 +5,15 @@ from abc import ABC, abstractmethod
 
 class ClientServerTopo(ABC):
     """Client-Server topology base class - defines interfaces for nodes to implement"""
-    
+
+    def setup_rdma(self):
+        """Setup RDMA (rxr_rxe) on client and server nodes.
+
+        Default implementation does nothing. Infra implementations that support
+        RDMA should override this method.
+        """
+        pass
+
     class Client(ABC):
         @abstractmethod
         def get_ipv4(self) -> str:

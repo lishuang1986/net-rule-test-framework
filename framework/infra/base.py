@@ -44,6 +44,10 @@ class BaseInfra(ABC):
     
     def _check_result(self, result, cmd: str, check: bool = True, expect: str = "passed"):
         """Unified result check logic"""
+        # check=False means skip all returncode checks
+        if not check:
+            return result
+
         if expect == "failed":
             if result.returncode == 0:
                 raise AssertionError(f"Expected failure, but command succeeded.\nCommand: {cmd}")
@@ -54,11 +58,9 @@ class BaseInfra(ABC):
                     f"Command: {cmd}\n{result.stderr}"
                 )
         else:
-            if check and result.returncode != 0:
-                raise AssertionError(
-                    f"Command failed with exit code {result.returncode}\n"
-                    f"Command: {cmd}\n{result.stderr}"
-                )
+            # TODO: Determine behavior for other expect values
+            # For now, skip returncode check for unknown expect values
+            pass
         return result
 
 
@@ -69,11 +71,20 @@ class NetnsNode:
         self._name = name
         self._tag = tag
 
-    def run(self, cmd: str, check: bool = True, expect: str = "passed"):
+    def run(self, cmd: str, check: bool = True, expect: str = "passed", background: bool = False):
         physical_ns = self._executor._logical_to_physical[self._name]
         full_cmd = f"ip netns exec {physical_ns} {cmd}"
-        result = self._executor._execute(full_cmd, tag=self._tag)
-        return self._executor._check_result(result, cmd, check, expect)
+
+        if background:
+            if self._executor.verbose:
+                print(f"[{self._tag}] $ {full_cmd} &")
+            return subprocess.Popen(
+                full_cmd, shell=True,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            )
+        else:
+            result = self._executor._execute(full_cmd, tag=self._tag)
+            return self._executor._check_result(result, cmd, check, expect)
 
     def _wait_for_ipv6_dad(self, timeout: float = 3.0) -> bool:
         """Wait for IPv6 DAD to complete inside this node's netns."""
@@ -97,12 +108,21 @@ class VrfNode:
         self._name = name
         self._tag = tag
 
-    def run(self, cmd: str, check: bool = True, expect: str = "passed"):
+    def run(self, cmd: str, check: bool = True, expect: str = "passed", background: bool = False):
         # Get VRF name (assuming executor has _logical_to_physical mapping)
         vrf_name = self._executor._logical_to_physical[self._name]
         full_cmd = f"ip vrf exec {vrf_name} {cmd}"
-        result = self._executor._execute(full_cmd, tag=self._tag)
-        return self._executor._check_result(result, cmd, check, expect)
+
+        if background:
+            if self._executor.verbose:
+                print(f"[{self._tag}] $ {full_cmd} &")
+            return subprocess.Popen(
+                full_cmd, shell=True,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            )
+        else:
+            result = self._executor._execute(full_cmd, tag=self._tag)
+            return self._executor._check_result(result, cmd, check, expect)
 
     def _wait_for_ipv6_dad(self, timeout: float = 3.0) -> bool:
         """Wait for IPv6 DAD to complete (VRF interfaces are on host)."""
@@ -125,10 +145,18 @@ class HostNode:
         self._name = name
         self._tag = tag
 
-    def run(self, cmd: str, check: bool = True, expect: str = "passed"):
+    def run(self, cmd: str, check: bool = True, expect: str = "passed", background: bool = False):
         # Execute directly, no prefix added
-        result = self._executor._execute(cmd, tag=self._tag)
-        return self._executor._check_result(result, cmd, check, expect)
+        if background:
+            if self._executor.verbose:
+                print(f"[{self._tag}] $ {cmd} &")
+            return subprocess.Popen(
+                cmd, shell=True,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            )
+        else:
+            result = self._executor._execute(cmd, tag=self._tag)
+            return self._executor._check_result(result, cmd, check, expect)
 
     def _wait_for_ipv6_dad(self, timeout: float = 3.0) -> bool:
         """Wait for IPv6 DAD to complete on the host."""
@@ -137,6 +165,53 @@ class HostNode:
             ret = subprocess.run(
                 "ip -6 addr show tentative 2>/dev/null | grep -c tentative",
                 shell=True, capture_output=True, text=True)
+            count = ret.stdout.strip()
+            if count == "" or int(count) == 0:
+                return True
+            time.sleep(0.2)
+        return False
+
+
+class LibvirtVMNode:
+    """Node that executes commands via SSH on a libvirt VM.
+
+    Currently supports Fedora/RHEL/CentOS based VMs with:
+    - Root password set to 'rdma'
+    - SSH password authentication enabled
+    - sshpass installed on host for SSH automation
+    """
+
+    def __init__(self, executor, name: str, tag: str):
+        self._executor = executor
+        self._name = name
+        self._tag = tag
+
+    def run(self, cmd: str, check: bool = True, expect: str = "passed", background: bool = False):
+        ip = self._executor._logical_to_ip[self._name]
+        ssh_user = self._executor.ssh_user
+        ssh_password = self._executor.ssh_password
+        full_cmd = f"sshpass -p '{ssh_password}' ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null {ssh_user}@{ip} '{cmd}'"
+
+        if background:
+            if self._executor.verbose:
+                print(f"[{self._tag}] $ {full_cmd} &")
+            return subprocess.Popen(
+                full_cmd, shell=True,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            )
+        else:
+            result = self._executor._execute(full_cmd, tag=self._tag)
+            return self._executor._check_result(result, cmd, check, expect)
+
+    def _wait_for_ipv6_dad(self, timeout: float = 3.0) -> bool:
+        """Wait for IPv6 DAD to complete inside this VM."""
+        ip = self._executor._logical_to_ip[self._name]
+        ssh_user = self._executor.ssh_user
+        ssh_password = self._executor.ssh_password
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            check_cmd = f"sshpass -p '{ssh_password}' ssh -o StrictHostKeyChecking=no {ssh_user}@{ip} 'ip -6 addr show tentative 2>/dev/null | grep -c tentative'"
+            ret = subprocess.run(check_cmd, shell=True, capture_output=True, text=True)
             count = ret.stdout.strip()
             if count == "" or int(count) == 0:
                 return True

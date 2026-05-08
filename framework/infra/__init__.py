@@ -5,6 +5,7 @@ from .netns.router import NetnsRouterInfra
 from .netns.host_router import NetnsHostRouterInfra
 from .vrf.client_server import VrfClientServerInfra
 from .vrf.router import VrfRouterInfra
+from .libvirt.client_server import LibvirtClientServerInfra
 
 __all__ = [
     "NetnsClientServerInfra",
@@ -12,4 +13,5 @@ __all__ = [
     "NetnsHostRouterInfra",
     "VrfClientServerInfra",
     "VrfRouterInfra",
+    "LibvirtClientServerInfra",
 ]
