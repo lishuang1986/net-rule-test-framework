@@ -201,6 +201,7 @@ class LibvirtClientServerInfra(ClientServerTopo, BaseInfra):
     def _customize_base_image(self):
         """Customize base image with virt-customize (only once)"""
         marker_file = f"{self.BASE_IMAGE}.customized"
+        disk_size = "20G"
 
         # Skip if already customized
         if os.path.exists(marker_file):
@@ -211,13 +212,46 @@ class LibvirtClientServerInfra(ClientServerTopo, BaseInfra):
         if BaseInfra.verbose:
             print(f"[INFO] Customizing base image: {self.BASE_IMAGE}")
 
+        # Expand base image to make room for package installation
+        import json
+        info = subprocess.run(
+            f"qemu-img info {self.BASE_IMAGE} --output json",
+            shell=True, capture_output=True, text=True, check=True)
+        cur_virt_size = json.loads(info.stdout).get("virtual-size", 0)
+        size_gb = int(disk_size.rstrip('G'))
+        if cur_virt_size < size_gb * 1024**3:
+            result = subprocess.run(
+                f"guestfish --ro -a {self.BASE_IMAGE} -i mountpoints",
+                shell=True, capture_output=True, text=True, check=True)
+            root_part = None
+            for line in result.stdout.strip().split('\n'):
+                if ': ' in line:
+                    dev, mp = line.split(': ', 1)
+                    if mp == '/':
+                        root_part = dev
+                        break
+            if not root_part:
+                raise RuntimeError("Cannot detect root partition from base image")
+            if BaseInfra.verbose:
+                print(f"[INFO] Expanding base image to {disk_size} with virt-resize")
+            tmp_img = self.BASE_IMAGE + ".expanded"
+            subprocess.run(
+                f"qemu-img create -f qcow2 {tmp_img} {disk_size}",
+                shell=True, check=True)
+            subprocess.run(
+                f"virt-resize --expand {root_part} {self.BASE_IMAGE} {tmp_img}",
+                shell=True, check=True)
+            subprocess.run(f"mv {tmp_img} {self.BASE_IMAGE}", shell=True, check=True)
+
         cmd = (
             f"virt-customize -a {self.BASE_IMAGE} "
             f"--root-password password:{self.ssh_password} "
             f"--run-command 'sed -i \"s/^#PermitRootLogin prohibit-password/PermitRootLogin yes/\" /etc/ssh/sshd_config' "
             f"--run-command 'sed -i \"s/^#PasswordAuthentication yes/PasswordAuthentication yes/\" /etc/ssh/sshd_config' "
             f"--run-command 'systemctl restart sshd' "
-            f"--run-command 'dnf install -y rdma-core perftest librdmacm-utils iproute iproute-tc kernel-modules-$(uname -r) libibverbs-utils'"
+            f"--run-command 'dnf update -y' "
+            f"--run-command 'dnf install -y kernel-modules perftest librdmacm-utils perf iproute iproute-tc' "
+            f"--run-command 'dnf debuginfo-install -y libibverbs-utils libibverbs rdma-core kernel'"
         )
         result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
         if result.returncode != 0:
@@ -233,7 +267,7 @@ class LibvirtClientServerInfra(ClientServerTopo, BaseInfra):
             print(f"[INFO] Base image customized successfully")
 
     def _create_vm_disks(self):
-        """Create VM disk images from base image"""
+        """Create VM disk images from (already resized) base image."""
         for node, disk_path in self.VM_DISKS.items():
             if os.path.exists(disk_path):
                 subprocess.run(f"rm -f {disk_path}", shell=True)
@@ -341,9 +375,18 @@ class LibvirtClientServerInfra(ClientServerTopo, BaseInfra):
                 raise RuntimeError(f"Failed to get interface name inside {vm_name}")
 
     def _health_check(self):
-        """Basic connectivity check"""
-        server_ip = self.Server.get_ipv4()
-        self.Client.run(f"ping -c 1 -W 1 {server_ip}")
+        """Basic connectivity check (IPv4 + IPv6)"""
+        # Wait for IPv6 DAD to complete
+        self.Client._wait_for_ipv6_dad()
+        self.Server._wait_for_ipv6_dad()
+
+        # Check IPv4 connectivity
+        server_ipv4 = self.Server.get_ipv4()
+        self.Client.run(f"ping -c 1 -W 1 {server_ipv4}")
+
+        # Check IPv6 connectivity
+        server_ipv6 = self.Server.get_ipv6()
+        self.Client.run(f"ping -6 -c 3 -W 3 {server_ipv6}")
 
     def _setup_ipv6(self):
         """Setup temporary IPv6 addresses on VMs (lost after reboot)"""

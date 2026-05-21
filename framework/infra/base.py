@@ -22,16 +22,16 @@ class BaseInfra(ABC):
     def cleanup(self):
         pass
 
-    def _execute(self, cmd: str, tag: str = ""):
+    def _execute(self, cmd: str, tag: str = "", silent: bool = False):
         if self.__class__.verbose:
             if tag:
                 print(f"[{tag}] $ {cmd}")
             else:
                 print(f"$ {cmd}")
-        
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-        
-        if self.__class__.verbose:
+
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, errors='replace')
+
+        if self.__class__.verbose and not silent:
             if result.stdout:
                 print(f"[STDOUT]\n{result.stdout.rstrip()}")
             if result.stderr:
@@ -39,7 +39,7 @@ class BaseInfra(ABC):
             if result.returncode != 0:
                 print(f"[RETURN] {result.returncode}")
             print("-" * 40)
-        
+
         return result
     
     def _check_result(self, result, cmd: str, check: bool = True, expect: str = "passed"):
@@ -71,7 +71,7 @@ class NetnsNode:
         self._name = name
         self._tag = tag
 
-    def run(self, cmd: str, check: bool = True, expect: str = "passed", background: bool = False):
+    def run(self, cmd: str, check: bool = True, expect: str = "passed", background: bool = False, silent: bool = False):
         physical_ns = self._executor._logical_to_physical[self._name]
         full_cmd = f"ip netns exec {physical_ns} {cmd}"
 
@@ -83,7 +83,7 @@ class NetnsNode:
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE
             )
         else:
-            result = self._executor._execute(full_cmd, tag=self._tag)
+            result = self._executor._execute(full_cmd, tag=self._tag, silent=silent)
             return self._executor._check_result(result, cmd, check, expect)
 
     def _wait_for_ipv6_dad(self, timeout: float = 3.0) -> bool:
@@ -108,7 +108,7 @@ class VrfNode:
         self._name = name
         self._tag = tag
 
-    def run(self, cmd: str, check: bool = True, expect: str = "passed", background: bool = False):
+    def run(self, cmd: str, check: bool = True, expect: str = "passed", background: bool = False, silent: bool = False):
         # Get VRF name (assuming executor has _logical_to_physical mapping)
         vrf_name = self._executor._logical_to_physical[self._name]
         full_cmd = f"ip vrf exec {vrf_name} {cmd}"
@@ -121,7 +121,7 @@ class VrfNode:
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE
             )
         else:
-            result = self._executor._execute(full_cmd, tag=self._tag)
+            result = self._executor._execute(full_cmd, tag=self._tag, silent=silent)
             return self._executor._check_result(result, cmd, check, expect)
 
     def _wait_for_ipv6_dad(self, timeout: float = 3.0) -> bool:
@@ -145,7 +145,7 @@ class HostNode:
         self._name = name
         self._tag = tag
 
-    def run(self, cmd: str, check: bool = True, expect: str = "passed", background: bool = False):
+    def run(self, cmd: str, check: bool = True, expect: str = "passed", background: bool = False, silent: bool = False):
         # Execute directly, no prefix added
         if background:
             if self._executor.verbose:
@@ -155,7 +155,7 @@ class HostNode:
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE
             )
         else:
-            result = self._executor._execute(cmd, tag=self._tag)
+            result = self._executor._execute(cmd, tag=self._tag, silent=silent)
             return self._executor._check_result(result, cmd, check, expect)
 
     def _wait_for_ipv6_dad(self, timeout: float = 3.0) -> bool:
@@ -186,7 +186,7 @@ class LibvirtVMNode:
         self._name = name
         self._tag = tag
 
-    def run(self, cmd: str, check: bool = True, expect: str = "passed", background: bool = False):
+    def run(self, cmd: str, check: bool = True, expect: str = "passed", background: bool = False, silent: bool = False):
         ip = self._executor._logical_to_ip[self._name]
         ssh_user = self._executor.ssh_user
         ssh_password = self._executor.ssh_password
@@ -200,7 +200,7 @@ class LibvirtVMNode:
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE
             )
         else:
-            result = self._executor._execute(full_cmd, tag=self._tag)
+            result = self._executor._execute(full_cmd, tag=self._tag, silent=silent)
             return self._executor._check_result(result, cmd, check, expect)
 
     def _wait_for_ipv6_dad(self, timeout: float = 3.0) -> bool:
