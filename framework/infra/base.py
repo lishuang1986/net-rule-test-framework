@@ -86,6 +86,21 @@ class NetnsNode:
             result = self._executor._execute(full_cmd, tag=self._tag, silent=silent)
             return self._executor._check_result(result, cmd, check, expect)
 
+    def get(self, src: str, dst: str, check: bool = True, silent: bool = False):
+        """Copy a file from the host to this netns node via cp.
+
+        NetnsNode shares the host filesystem, so cp works directly.
+
+        Args:
+            src: Source path on the host
+            dst: Destination path on this node
+            check: Whether to assert command success
+            silent: Suppress output
+        """
+        cmd = f"cp {src} {dst}"
+        result = self._executor._execute(cmd, tag=self._tag, silent=silent)
+        return self._executor._check_result(result, cmd, check)
+
     def _wait_for_ipv6_dad(self, timeout: float = 3.0) -> bool:
         """Wait for IPv6 DAD to complete inside this node's netns."""
         physical_ns = self._executor._logical_to_physical[self._name]
@@ -124,6 +139,21 @@ class VrfNode:
             result = self._executor._execute(full_cmd, tag=self._tag, silent=silent)
             return self._executor._check_result(result, cmd, check, expect)
 
+    def get(self, src: str, dst: str, check: bool = True, silent: bool = False):
+        """Copy a file from the host to this VRF node via cp.
+
+        VrfNode shares the host filesystem, so cp works directly.
+
+        Args:
+            src: Source path on the host
+            dst: Destination path on this node
+            check: Whether to assert command success
+            silent: Suppress output
+        """
+        cmd = f"cp {src} {dst}"
+        result = self._executor._execute(cmd, tag=self._tag, silent=silent)
+        return self._executor._check_result(result, cmd, check)
+
     def _wait_for_ipv6_dad(self, timeout: float = 3.0) -> bool:
         """Wait for IPv6 DAD to complete (VRF interfaces are on host)."""
         deadline = time.time() + timeout
@@ -157,6 +187,19 @@ class HostNode:
         else:
             result = self._executor._execute(cmd, tag=self._tag, silent=silent)
             return self._executor._check_result(result, cmd, check, expect)
+
+    def get(self, src: str, dst: str, check: bool = True, silent: bool = False):
+        """Copy a file on the host (cp wrapper).
+
+        Args:
+            src: Source path
+            dst: Destination path
+            check: Whether to assert command success
+            silent: Suppress output
+        """
+        cmd = f"cp {src} {dst}"
+        result = self._executor._execute(cmd, tag=self._tag, silent=silent)
+        return self._executor._check_result(result, cmd, check)
 
     def _wait_for_ipv6_dad(self, timeout: float = 3.0) -> bool:
         """Wait for IPv6 DAD to complete on the host."""
@@ -202,6 +245,26 @@ class LibvirtVMNode:
         else:
             result = self._executor._execute(full_cmd, tag=self._tag, silent=silent)
             return self._executor._check_result(result, cmd, check, expect)
+
+    def get(self, src: str, dst: str, check: bool = True, silent: bool = False):
+        """Copy a file from the host to this VM via scp.
+
+        Args:
+            src: Source path on the host
+            dst: Destination path on this VM
+            check: Whether to assert command success
+            silent: Suppress output
+        """
+        ip = self._executor._logical_to_ip[self._name]
+        ssh_user = self._executor.ssh_user
+        ssh_password = self._executor.ssh_password
+        cmd = (
+            f"sshpass -p '{ssh_password}' "
+            f"scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "
+            f"{src} {ssh_user}@{ip}:{dst}"
+        )
+        result = self._executor._execute(cmd, tag=self._tag, silent=silent)
+        return self._executor._check_result(result, cmd, check)
 
     def _wait_for_ipv6_dad(self, timeout: float = 3.0) -> bool:
         """Wait for IPv6 DAD to complete inside this VM."""

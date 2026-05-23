@@ -250,13 +250,17 @@ class LibvirtClientServerInfra(ClientServerTopo, BaseInfra):
             f"--run-command 'sed -i \"s/^#PasswordAuthentication yes/PasswordAuthentication yes/\" /etc/ssh/sshd_config' "
             f"--run-command 'systemctl restart sshd' "
             f"--run-command 'dnf update -y' "
-            f"--run-command 'dnf install -y kernel-modules perftest librdmacm-utils perf iproute iproute-tc' "
-            f"--run-command 'dnf debuginfo-install -y libibverbs-utils libibverbs rdma-core kernel'"
+            f"--run-command 'dnf install -y iproute iproute-tc' "
+            f"--run-command 'dnf install -y tcpdump wireshark perf gcc' "
+            f"--run-command 'dnf install -y kernel-modules perftest librdmacm-utils' "
+            f"--run-command 'dnf remove -y kernel-debuginfo-common kernel-debuginfo || true' "
+            f"--run-command 'dnf debuginfo-install -y libibverbs-utils libibverbs rdma-core kernel' "
+            f"--run-command 'dnf install -y rdma-core-devel'"
         )
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        result = subprocess.run(cmd, shell=True)
         if result.returncode != 0:
             raise RuntimeError(
-                f"Failed to customize base image: {result.stderr}"
+                f"Failed to customize base image (exit code {result.returncode})"
             )
 
         # Create marker file to indicate customization is done
