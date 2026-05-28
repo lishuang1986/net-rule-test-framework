@@ -1,0 +1,32 @@
+name: TC CI
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  test-tc:
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:22.04
+      options: --privileged
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y iproute2 iputils-ping python3-pip
+          pip install pytest
+
+      - name: Run TC tests
+        run: |
+          pytest tests/tc/ -v
