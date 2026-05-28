@@ -251,7 +251,7 @@ class LibvirtClientServerInfra(ClientServerTopo, BaseInfra):
             f"--run-command 'systemctl restart sshd' "
             f"--run-command 'dnf update -y' "
             f"--run-command 'dnf install -y iproute iproute-tc' "
-            f"--run-command 'dnf install -y tcpdump wireshark perf gcc' "
+            f"--run-command 'dnf install -y tcpdump wireshark trace-cmd perf gcc' "
             f"--run-command 'dnf install -y kernel-modules perftest librdmacm-utils' "
             f"--run-command 'dnf remove -y kernel-debuginfo-common kernel-debuginfo || true' "
             f"--run-command 'dnf debuginfo-install -y libibverbs-utils libibverbs rdma-core kernel' "
