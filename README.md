@@ -1,5 +1,7 @@
 # Net-Rule Test Framework
 
+[![TC CI](https://github.com/lishuang1986/net-rule-test-framework/actions/workflows/CI-TC.yaml/badge.svg)](https://github.com/lishuang1986/net-rule-test-framework/actions/workflows/CI-TC.yaml)
+
 **Network Rule Automation Testing Framework**
 
 ## Overview
