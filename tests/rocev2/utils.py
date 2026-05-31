@@ -53,6 +53,50 @@ def parse_pingpong_output(host, log_file):
     return data
 
 
+def parse_ib_write_bw_output(host, log_file):
+    """Parse ib_write_bw client output and extract bandwidth metrics.
+
+    Calls ``host.run(f"cat {log_file}")`` once and parses the data line
+    from the summary table.
+
+    Args:
+        host: The VM/host object to run commands on
+        log_file: Path to the ib_write_bw client output log file
+
+    Returns:
+        Dict with the following keys:
+
+        - **bytes** (int) — message size (optional)
+        - **iterations** (int) — number of iterations (optional)
+        - **bw_peak_mb_sec** (float) — peak BW in MB/sec (optional)
+        - **bw_avg_mb_sec** (float) — average BW in MB/sec (optional)
+        - **msg_rate_mpps** (float) — message rate in Mpps (optional)
+    """
+    result = host.run(f"cat {log_file} 2>/dev/null || echo ''")
+    output = result.stdout
+    data = {}
+
+    # Data line format (from ib_write_bw summary table):
+    #   bytes   #iterations    BW peak[MB/sec]    BW average[MB/sec]   MsgRate[Mpps]
+    #   1024    5000           1234.56             1200.00              0.002145
+    #
+    # Match lines that start with whitespace and a number (byte count),
+    # followed by whitespace-separated numeric fields.
+    for line in output.split('\n'):
+        line_stripped = line.strip()
+        m = re.match(r'^(\d+)\s+(\d+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)', line_stripped)
+        if m:
+            data['bytes'] = int(m.group(1))
+            data['iterations'] = int(m.group(2))
+            data['bw_peak_mb_sec'] = float(m.group(3))
+            data['bw_avg_mb_sec'] = float(m.group(4))
+            data['msg_rate_mpps'] = float(m.group(5))
+            # Only take the first matching data line (the summary)
+            break
+
+    return data
+
+
 def parse_perf_stat_text(text):
     """Parse raw perf stat output text and return a dict of found metrics.
 

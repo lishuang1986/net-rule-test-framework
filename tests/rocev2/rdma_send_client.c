@@ -112,8 +112,13 @@ int wait_hybrid(struct ibv_cq *cq, char *buf, size_t buf_size, struct ibv_comp_c
 int main(int argc, char **argv) {
     int opt, mode = MODE_HYBRID;   // Default to hybrid mode
     static struct option long_opts[] = {
-        {"mode", required_argument, 0, 'm'},
-        {0, 0, 0, 0}
+        {
+            .name = "mode",
+            .has_arg = required_argument,
+            .flag = NULL,
+            .val = 'm',
+        },
+        {0},
     };
     while ((opt = getopt_long(argc, argv, "m:", long_opts, NULL)) != -1) {
         switch (opt) {
@@ -137,10 +142,10 @@ int main(int argc, char **argv) {
     if (ret) { perror("rdma_create_id"); return 1; }
 
     // 2. Convert server IP to sockaddr_in
-    struct sockaddr_in server_addr;
-    memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(7474);
+    struct sockaddr_in server_addr = {
+        .sin_family = AF_INET,
+        .sin_port = htons(7474),
+    };
     inet_pton(AF_INET, server_ip, &server_addr.sin_addr);
 
     // 3. Resolve address
@@ -169,15 +174,17 @@ int main(int argc, char **argv) {
     if (!cq) { perror("ibv_create_cq"); return 1; }
 
     // 8. Configure QP attributes
-    struct ibv_qp_init_attr qp_attr;
-    memset(&qp_attr, 0, sizeof(qp_attr));
-    qp_attr.cap.max_send_wr = 1;
-    qp_attr.cap.max_recv_wr = 1;
-    qp_attr.cap.max_send_sge = 1;
-    qp_attr.cap.max_recv_sge = 1;
-    qp_attr.qp_type = IBV_QPT_RC;
-    qp_attr.send_cq = cq;
-    qp_attr.recv_cq = cq;
+    struct ibv_qp_init_attr qp_attr = {
+        .cap = {
+            .max_send_wr = 1,
+            .max_recv_wr = 1,
+            .max_send_sge = 1,
+            .max_recv_sge = 1,
+        },
+        .qp_type = IBV_QPT_RC,
+        .send_cq = cq,
+        .recv_cq = cq,
+    };
 
     // 9. Create QP
     ret = rdma_create_qp(id, pd, &qp_attr);
@@ -194,8 +201,19 @@ int main(int argc, char **argv) {
     printf("Connection established, sending data...\n");
 
     // 12. Post send request
-    struct ibv_sge sge = {.addr = (uintptr_t)buf, .length = strlen(buf)+1, .lkey = mr->lkey};
-    struct ibv_send_wr send_wr = {.wr_id = 0, .sg_list = &sge, .num_sge = 1, .opcode = IBV_WR_SEND, .send_flags = IBV_SEND_SIGNALED};
+    struct ibv_sge sge = {
+        .addr = (uintptr_t)buf,
+        .length = strlen(buf) + 1,
+        .lkey = mr->lkey,
+    };
+    struct ibv_send_wr send_wr = {
+        .wr_id = 0,
+        .sg_list = &sge,
+        .num_sge = 1,
+        .opcode = IBV_WR_SEND,
+        .send_flags = IBV_SEND_SIGNALED,
+    };
+
     struct ibv_send_wr *bad_send_wr;
     struct timespec t_start, t_end;
     clock_gettime(CLOCK_MONOTONIC, &t_start);

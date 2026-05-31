@@ -66,6 +66,7 @@ class LibvirtClientServerInfra(ClientServerTopo, BaseInfra):
     def __init__(self):
         self.prefix = str(uuid.uuid4())[:8]
         self._logical_to_ip: Dict[str, str] = {}
+        self._logical_to_vnet: Dict[str, str] = {}
         self._logical_to_iface: Dict[str, str] = {}
         self._logical_to_ipv6: Dict[str, str] = {}
         self._created_disks = []
@@ -329,10 +330,14 @@ class LibvirtClientServerInfra(ClientServerTopo, BaseInfra):
 
             # Wait for IP address via virsh domifaddr
             while time.time() < deadline:
-                _, ip = self._parse_domifaddr(vm_name)
+                vnet_name, ip = self._parse_domifaddr(vm_name)
                 if ip:
                     break
                 time.sleep(2)
+
+            # Store vnet interface name and set MTU 9000 on host-side tap
+            self._logical_to_vnet[node] = vnet_name
+            subprocess.run(f"ip link set dev {vnet_name} mtu 9000", shell=True, check=True)
 
             if not ip:
                 raise RuntimeError(f"Timeout waiting for {vm_name} to get IP address")

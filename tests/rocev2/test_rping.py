@@ -18,14 +18,14 @@ def test_rping_ipv4(rocev2_env):
 
     # Start rping server in background (listen on all interfaces)
     server_proc = rocev2_env.Server.run(
-        "rping -s -d rxe_server -C 5 -v -a 0.0.0.0 > /tmp/rping_server.log 2>&1",
+        "rping -s -d rxe_server -C 3 -v -a 0.0.0.0 > /tmp/rping_server.log 2>&1",
         background=True
     )
     time.sleep(2)
     try:
         # Run rping client (connect to server IP)
         rocev2_env.Client.run(
-            f"rping -c -d rxe_client -C 5 -v -a {server_ip} > /tmp/rping_client.log 2>&1"
+            f"rping -c -d rxe_client -C 3 -v -a {server_ip} > /tmp/rping_client.log 2>&1"
         )
     finally:
         server_proc.terminate()

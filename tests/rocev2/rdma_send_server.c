@@ -112,8 +112,13 @@ int wait_hybrid(struct ibv_cq *cq, char *buf, size_t buf_size, struct ibv_comp_c
 int main(int argc, char **argv) {
     int opt, mode = MODE_HYBRID;   // Default to hybrid mode
     static struct option long_opts[] = {
-        {"mode", required_argument, 0, 'm'},
-        {0, 0, 0, 0}
+        {
+            .name = "mode",
+            .has_arg = required_argument,
+            .flag = NULL,
+            .val = 'm',
+        },
+        {0},
     };
     while ((opt = getopt_long(argc, argv, "m:", long_opts, NULL)) != -1) {
         switch (opt) {
@@ -134,11 +139,11 @@ int main(int argc, char **argv) {
     if (ret) { perror("rdma_create_id"); return 1; }
 
     // 2. Bind address and port
-    struct sockaddr_in server_addr;
-    memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = INADDR_ANY;
-    server_addr.sin_port = htons(7474);
+    struct sockaddr_in server_addr = {
+        .sin_family = AF_INET,
+        .sin_addr.s_addr = INADDR_ANY,
+        .sin_port = htons(7474),
+    };
     ret = rdma_bind_addr(listen_id, (struct sockaddr *)&server_addr);
     if (ret) { perror("rdma_bind_addr"); return 1; }
 
@@ -170,15 +175,17 @@ int main(int argc, char **argv) {
     if (!cq) { perror("ibv_create_cq"); return 1; }
 
     // 8. Configure QP attributes
-    struct ibv_qp_init_attr qp_attr;
-    memset(&qp_attr, 0, sizeof(qp_attr));
-    qp_attr.cap.max_send_wr = 1;
-    qp_attr.cap.max_recv_wr = 1;
-    qp_attr.cap.max_send_sge = 1;
-    qp_attr.cap.max_recv_sge = 1;
-    qp_attr.qp_type = IBV_QPT_RC;
-    qp_attr.send_cq = cq;
-    qp_attr.recv_cq = cq;
+    struct ibv_qp_init_attr qp_attr = {
+        .cap = {
+            .max_send_wr = 1,
+            .max_recv_wr = 1,
+            .max_send_sge = 1,
+            .max_recv_sge = 1,
+        },
+        .qp_type = IBV_QPT_RC,
+        .send_cq = cq,
+        .recv_cq = cq,
+    };
 
     // 9. Create QP
     ret = rdma_create_qp(conn_id, pd, &qp_attr);
@@ -191,8 +198,16 @@ int main(int argc, char **argv) {
     if (!mr) { perror("ibv_reg_mr"); return 1; }
 
     // 11. Post receive request (Recv WQE)
-    struct ibv_sge sge = {.addr = (uintptr_t)buf, .length = sizeof(buf), .lkey = mr->lkey};
-    struct ibv_recv_wr recv_wr = {.wr_id = 0, .sg_list = &sge, .num_sge = 1};
+    struct ibv_sge sge = {
+        .addr = (uintptr_t)buf,
+        .length = sizeof(buf),
+        .lkey = mr->lkey,
+    };
+    struct ibv_recv_wr recv_wr = {
+        .wr_id = 0,
+        .sg_list = &sge,
+        .num_sge = 1,
+    };
     struct ibv_recv_wr *bad_recv_wr;
     ret = ibv_post_recv(conn_id->qp, &recv_wr, &bad_recv_wr);
     if (ret) { perror("ibv_post_recv"); return 1; }

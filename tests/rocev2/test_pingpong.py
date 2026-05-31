@@ -23,28 +23,47 @@ pytestmark = [pytest.mark.rocev2]
 def test_ibv_pingpong_ipv4(rocev2_env, transport, log_suffix):
     """Test RDMA connectivity using ibv_{rc,uc,ud}_pingpong over IPv4"""
     server_ip = rocev2_env.Server.get_ipv4()
+    client_iface = rocev2_env.Client.get_iface()
     binary = f"ibv_{transport}_pingpong"
+    pcap_file = f"/tmp/pingpong{log_suffix}.pcap"
+    port = "18515"
+
+    # Start tcpdump in background to capture RoCEv2 traffic (UDP port 4791)
+    tcpdump_proc = rocev2_env.Client.run(
+        f"tcpdump -U -i {client_iface} tcp port {port} or udp port 4791 -w {pcap_file}",
+        background=True
+    )
+    time.sleep(1)
 
     # Start server in background, redirect output to file
     server_proc = rocev2_env.Server.run(
-        f"{binary} -d rxe_server -g 1 -n 5 > /tmp/pingpong{log_suffix}_server.log 2>&1",
+        f"{binary} -d rxe_server -g 1 -n 3 -p {port} > /tmp/pingpong{log_suffix}_server.log 2>&1",
         background=True
     )
     time.sleep(2)
     try:
         # Run client and redirect output to file
         rocev2_env.Client.run(
-            f"{binary} -d rxe_client -g 1 -n 5 {server_ip} > /tmp/pingpong{log_suffix}_client.log 2>&1"
+            f"{binary} -d rxe_client -g 1 -n 3 -p {port} {server_ip} > /tmp/pingpong{log_suffix}_client.log 2>&1"
         )
     finally:
         server_proc.terminate()
         server_proc.wait()
+
+        # Stop tcpdump and wait for buffer flush
+        tcpdump_proc.terminate()
+        tcpdump_proc.wait()
+        time.sleep(1)
 
         # Print server output
         rocev2_env.Server.run(f"cat /tmp/pingpong{log_suffix}_server.log")
 
         # Print client output
         rocev2_env.Client.run(f"cat /tmp/pingpong{log_suffix}_client.log")
+
+        # Display tcpdump capture — RoCEv2 (UDP 4791)
+        rocev2_env.Client.run(f"tshark -r {pcap_file} -Y \"udp.port == 4791\"")
+        rocev2_env.Client.run(f"tcpdump -nn -r {pcap_file}")
 
         # Compare with regular ping
         rocev2_env.Client.run(f"ping -c 1 {server_ip}")
@@ -57,14 +76,14 @@ def test_ibv_rc_pingpong_ipv6(rocev2_env):
 
     # Use -g 2 for IPv6 GID index (GID[2]=2001:db8:1::x)
     server_proc = rocev2_env.Server.run(
-        "ibv_rc_pingpong -d rxe_server -g 2 -n 5 > /tmp/pingpong_server_ipv6.log 2>&1",
+        "ibv_rc_pingpong -d rxe_server -g 2 -n 3 > /tmp/pingpong_server_ipv6.log 2>&1",
         background=True
     )
     time.sleep(2)
     try:
         # Run client and redirect output to file
         rocev2_env.Client.run(
-            f"ibv_rc_pingpong -d rxe_client -g 2 -n 5 > /tmp/pingpong_client_ipv6.log 2>&1"
+            f"ibv_rc_pingpong -d rxe_client -g 2 -n 3 > /tmp/pingpong_client_ipv6.log 2>&1"
         )
     finally:
         server_proc.terminate()

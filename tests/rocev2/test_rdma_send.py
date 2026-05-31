@@ -27,9 +27,18 @@ def _setup(rocev2_env):
 
 def _run_test(rocev2_env, mode, server_assert):
     server_ip = rocev2_env.Server.get_ipv4()
+    client_iface = rocev2_env.Client.get_iface()
     log_suffix = f"rdma_send_{mode}"
     server_log = f"/tmp/{log_suffix}_server.log"
     client_log = f"/tmp/{log_suffix}_client.log"
+    pcap_file = f"/tmp/{log_suffix}.pcap"
+
+    # Start tcpdump in background to capture RoCEv2 traffic (UDP port 4791)
+    tcpdump_proc = rocev2_env.Client.run(
+        f"tcpdump -U -i {client_iface} tcp port 7474 or udp port 4791 -w {pcap_file}",
+        background=True
+    )
+    time.sleep(1)
 
     # Start server with specific mode in background
     server_proc = rocev2_env.Server.run(
@@ -48,9 +57,20 @@ def _run_test(rocev2_env, mode, server_assert):
         server_proc.terminate()
         server_proc.wait()
 
+        # Stop tcpdump and wait for buffer flush
+        tcpdump_proc.terminate()
+        tcpdump_proc.wait()
+        time.sleep(1)
+
         # Print and verify outputs
         server_result = rocev2_env.Server.run(f"cat {server_log}", check=False)
         client_result = rocev2_env.Client.run(f"cat {client_log}", check=False)
+
+        # Display tcpdump capture — RoCEv2 (UDP 4791)
+        rocev2_env.Client.run(f"tshark -r {pcap_file} -Y \"udp.port == 4791\"")
+        # Display tcpdump capture — RDMA_CM over TCP (7474)
+        rocev2_env.Client.run(f"tshark -r {pcap_file} -Y \"tcp.port == 7474\"")
+        rocev2_env.Client.run(f"tcpdump -nn -r {pcap_file}")
 
         assert server_assert in server_result.stdout, \
             f"Server ({mode}) did not receive expected message"
