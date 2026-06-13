@@ -24,7 +24,8 @@ def test_nft_match_meta_cgroupv2_ipv4(host_router_env):
     # --- Setup ---
 
     # 1. Create cgroup
-    infra.Router.run("mkdir -p /sys/fs/cgroup/test")
+    # infra.Router.run("mkdir -p /sys/fs/cgroup/test")
+    infra.Router.run(f"cgcreate -g cpu,memory:test")
 
     # 2. Add nftables table and OUTPUT chain
     infra.Router.run("nft add table ip filter")

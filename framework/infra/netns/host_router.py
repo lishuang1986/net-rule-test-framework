@@ -1,7 +1,9 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 Li Shuang
+import shutil
 import subprocess
 import uuid
+import time
 from typing import Dict
 from ...topo.router import RouterTopo
 from ..base import BaseInfra, HostNode, NetnsNode
@@ -73,11 +75,12 @@ class NetnsHostRouterInfra(RouterTopo, BaseInfra):
 
     def setup(self) -> Dict[str, str]:
         # Stop firewalld if it is enabled, to avoid interference with tests
-        ret = subprocess.run(["systemctl", "is-enabled", "firewalld"],
-                             capture_output=True, text=True)
-        self._firewalld_was_enabled = ret.returncode == 0
-        if self._firewalld_was_enabled:
-            subprocess.run(["systemctl", "stop", "firewalld"], check=True)
+        if shutil.which("systemctl") is not None:
+            ret = subprocess.run(["systemctl", "is-enabled", "firewalld"],
+                                 capture_output=True, text=True)
+            self._firewalld_was_enabled = ret.returncode == 0
+            if self._firewalld_was_enabled:
+                subprocess.run(["systemctl", "stop", "firewalld"], check=True)
 
         client_name = "client"
         server_name = "server"
@@ -143,6 +146,9 @@ class NetnsHostRouterInfra(RouterTopo, BaseInfra):
             subprocess.run(f"ip netns del {physical_ns}", shell=True, stderr=subprocess.DEVNULL)
         if self._firewalld_was_enabled:
             subprocess.run(["systemctl", "start", "firewalld"], check=True)
+            while subprocess.run(["firewall-cmd", "--state"],
+                                  capture_output=True, text=True).stdout.strip() != "running":
+                time.sleep(1)
 
     def _create_veth_to_host(self, node: str, host_iface: str, peer_iface: str):
         """Create veth between host and a netns node"""

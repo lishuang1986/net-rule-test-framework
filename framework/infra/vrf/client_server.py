@@ -43,7 +43,8 @@ class VrfClientServerInfra(ClientServerTopo, BaseInfra):
         self._logical_to_physical: Dict[str, str] = {}
         self._next_table = 100
         self.veths = []
-        
+        self._selinux_mode = ""
+
         self.Client = self.Client(self)
         self.Server = self.Server(self)
     
@@ -85,6 +86,11 @@ class VrfClientServerInfra(ClientServerTopo, BaseInfra):
 
         self.veths.append((client_iface, server_iface))
 
+        result = subprocess.run("getenforce", shell=True, capture_output=True, text=True)
+        self._selinux_mode = result.stdout.strip()
+        if self._selinux_mode == "Enforcing":
+            subprocess.run("setenforce 0", shell=True, check=True)
+
         self._health_check()
         return self._logical_to_physical.copy()
 
@@ -95,6 +101,8 @@ class VrfClientServerInfra(ClientServerTopo, BaseInfra):
         self.Client.run(f"ping -c 1 -W 1 {self.Server.get_ipv6()}")
 
     def cleanup(self):
+        if self._selinux_mode == "Enforcing":
+            subprocess.run("setenforce 1", shell=True, stderr=subprocess.DEVNULL)
         for veth, peer in self.veths:
             subprocess.run(f"ip link del {veth}", shell=True, stderr=subprocess.DEVNULL)
         for vrf in self._logical_to_physical.values():

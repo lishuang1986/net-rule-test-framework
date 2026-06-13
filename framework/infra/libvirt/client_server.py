@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 Li Shuang
 import os
+import sys
 import subprocess
 import time
 import uuid
@@ -251,13 +252,24 @@ class LibvirtClientServerInfra(ClientServerTopo, BaseInfra):
             f"--run-command 'sed -i \"s/^#PasswordAuthentication yes/PasswordAuthentication yes/\" /etc/ssh/sshd_config' "
             f"--run-command 'systemctl restart sshd' "
             f"--run-command 'dnf update -y' "
-            f"--run-command 'dnf install -y iproute iproute-tc' "
-            f"--run-command 'dnf install -y tcpdump wireshark trace-cmd perf gcc' "
-            f"--run-command 'dnf install -y kernel-modules perftest librdmacm-utils' "
             f"--run-command 'dnf remove -y kernel-debuginfo-common kernel-debuginfo || true' "
-            f"--run-command 'dnf debuginfo-install -y libibverbs-utils libibverbs rdma-core kernel' "
-            f"--run-command 'dnf install -y rdma-core-devel'"
+            f"--run-command 'dnf debuginfo-install -y kernel' "
+            f"--run-command 'dnf install -y kernel-modules perftest' "
+            f"--run-command 'dnf install -y tcpdump wireshark trace-cmd perf' "
+            f"--run-command 'dnf debuginfo-install -y libibverbs-utils libibverbs rdma-core' "
+            f"--run-command 'dnf install -y libibverbs-utils librdmacm-utils rdma-core' "
+            f"--run-command 'dnf install -y rdma-core-devel gcc' "
+            f"--run-command 'dnf install -y iproute iproute-tc iptables nftables'"
         )
+        #proc = subprocess.Popen(cmd, shell=True,
+        #                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        #                        text=True, bufsize=1)
+        #for line in proc.stdout:
+        #    print(f"{line.rstrip()}")
+        #    sys.stdout.flush()
+        #proc.wait()
+        #if proc.returncode != 0:
+        #    raise RuntimeError(f"Customization failed (exit code {proc.returncode})")
         result = subprocess.run(cmd, shell=True)
         if result.returncode != 0:
             raise RuntimeError(
