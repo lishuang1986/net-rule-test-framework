@@ -1,7 +1,9 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 Li Shuang
+import shutil
 import subprocess
 import uuid
+import time
 from typing import Dict
 from ...topo.router import RouterTopo
 from ..base import BaseInfra, VrfNode
@@ -67,6 +69,8 @@ class VrfRouterInfra(RouterTopo, BaseInfra):
         self._logical_to_table: Dict[str, int] = {}
         self._next_table = 100
         self.veths = []
+        self._firewalld_was_enabled = False
+        self._selinux_mode = ""
 
         self.Client = self.Client(self)
         self.Router = self.Router(self)
@@ -76,6 +80,19 @@ class VrfRouterInfra(RouterTopo, BaseInfra):
         client_name = "client"
         router_name = "router"
         server_name = "server"
+
+        # Stop firewalld if it is enabled, to avoid interference with tests
+        if shutil.which("systemctl") is not None:
+            ret = subprocess.run(["systemctl", "is-enabled", "firewalld"],
+                                 capture_output=True, text=True)
+            self._firewalld_was_enabled = ret.returncode == 0
+            if self._firewalld_was_enabled:
+                subprocess.run(["systemctl", "stop", "firewalld"], check=True)
+
+        result = subprocess.run("getenforce", shell=True, capture_output=True, text=True)
+        self._selinux_mode = result.stdout.strip()
+        if self._selinux_mode == "Enforcing":
+            subprocess.run("setenforce 0", shell=True, check=True)
 
         # Clean up potentially leftover old interfaces
         subprocess.run(f"ip link del {self.Client.get_iface()}", shell=True, stderr=subprocess.DEVNULL)
@@ -145,6 +162,10 @@ class VrfRouterInfra(RouterTopo, BaseInfra):
         self.Client._wait_for_ipv6_dad()
         self.Router._wait_for_ipv6_dad()
         self.Server._wait_for_ipv6_dad()
+        self.Client.run(f"ping -c 1 -W 1 {self.Router.get_ipv4_to_client()}")
+        self.Client.run(f"ping -c 1 -W 1 {self.Router.get_ipv6_to_client()}")
+        self.Server.run(f"ping -c 1 -W 1 {self.Router.get_ipv4_to_server()}")
+        self.Server.run(f"ping -c 1 -W 1 {self.Router.get_ipv6_to_server()}")
         self.Client.run(f"ping -c 1 -W 1 {self.Server.get_ipv4()}")
         self.Client.run(f"ping -c 1 -W 1 {self.Server.get_ipv6()}")
 
@@ -153,3 +174,10 @@ class VrfRouterInfra(RouterTopo, BaseInfra):
             subprocess.run(f"ip link del {veth}", shell=True, stderr=subprocess.DEVNULL)
         for vrf in self._logical_to_physical.values():
             subprocess.run(f"ip link del {vrf}", shell=True, stderr=subprocess.DEVNULL)
+        if self._selinux_mode == "Enforcing":
+            subprocess.run("setenforce 1", shell=True, stderr=subprocess.DEVNULL)
+        if self._firewalld_was_enabled:
+            subprocess.run(["systemctl", "start", "firewalld"], check=True)
+            while subprocess.run(["firewall-cmd", "--state"],
+                                  capture_output=True, text=True).stdout.strip() != "running":
+                time.sleep(1)

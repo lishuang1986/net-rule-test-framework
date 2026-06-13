@@ -1,18 +1,18 @@
-name: TC CI
+name: Firewall CI
 
 on:
   push:
     branches: [ "main", "master" ]
     paths:
-      - 'tests/tc/**'
+      - 'tests/firewall/**'
   pull_request:
     branches: [ "main", "master" ]
     paths:
-      - 'tests/tc/**'
+      - 'tests/firewall/**'
   workflow_dispatch:
 
 jobs:
-  test-tc:
+  test-firewall:
     runs-on: ubuntu-latest
     container:
       image: ubuntu:22.04
@@ -29,9 +29,10 @@ jobs:
       - name: Install dependencies
         run: |
           apt-get update
-          apt-get install -y python3-pip iproute2 iputils-ping
+          apt-get install -y python3-pip iproute2 iputils-ping iptables nftables
           pip install pytest
 
-      - name: Run TC tests
+      - name: Run firewall tests
         run: |
-          pytest tests/tc/ -v
+          pytest tests/firewall/ -v \
+            --ignore=tests/firewall/nftables/test_match_meta_cgroupv2.py

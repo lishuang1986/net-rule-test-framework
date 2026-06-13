@@ -12,8 +12,8 @@ The provided examples illustrate usage with **Netfilter/iptables** and **TC**. T
 
 Supported backends:
 - Netns (network namespaces)
-- VRF (Virtual Routing and Forwarding) – **experimental**
-- Libvirt VMs (Fedora/RHEL/CentOS based) – **experimental**
+- VRF (Virtual Routing and Forwarding) – **POC**
+- Libvirt VMs (Fedora/RHEL/CentOS based) – **WIP**
 
 ## Quick Start
 
@@ -36,10 +36,10 @@ pytest tests -vv --html=report.html
 pytest tests/netfilter/ --infra=netns
 
 # Run only TC u32 match test
-pytest tests/tc/test_u32_match.py -vv
+pytest tests/tc/test_u32_match.py -vv -s
 
 # Run RoCEv2 tests with libvirt infra (requires rdma-core and perftest installed)
-pytest tests/rocev2/test_rocev2.py --infra=libvirt -vv
+pytest tests/rocev2/test_rocev2.py --infra=libvirt -vv -s
 # Note: netns infra currently does not support RoCEv2 tests
 
 # Run tests with Libvirt VMs (requires Fedora image prepared)
@@ -53,7 +53,7 @@ Currently supports **Fedora/RHEL/CentOS** based VMs.
 **Required pre-step (user action):**
 1. Install system packages:
    ```bash
-   sudo dnf install -y qemu-kvm libvirt virt-install libguestfs-tools wget sshpass
+   sudo dnf install -y qemu-kvm libvirt virt-install libguestfs guestfs-tools wget sshpass
    sudo systemctl enable --now libvirtd
    ```
 

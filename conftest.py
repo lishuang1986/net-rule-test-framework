@@ -22,6 +22,12 @@ def pytest_configure(config):
         BaseInfra.set_verbose(False)
 
 
+#def pytest_ignore_collect(collection_path, config):
+#    if config.getoption("--infra") != "libvirt" and "rocev2" in str(collection_path):
+#        return True
+#    return False
+
+
 @pytest.fixture
 def client_server_env(request):
     infra_type = request.config.getoption("--infra")
@@ -31,8 +37,6 @@ def client_server_env(request):
         infra = VrfClientServerInfra()
     elif infra_type == "libvirt":
         infra = LibvirtClientServerInfra()
-    else:
-        raise ValueError(f"Unknown infra: {infra_type}")
     try:
         infra.setup()
         yield infra
@@ -41,7 +45,10 @@ def client_server_env(request):
 
 
 @pytest.fixture
-def host_router_env():
+def host_router_env(request):
+    infra_type = request.config.getoption("--infra")
+    if infra_type != "netns":
+        pytest.skip(f"host_router_env requires --infra=netns, current: {infra_type}")
     infra = NetnsHostRouterInfra()
     try:
         infra.setup()
@@ -57,8 +64,8 @@ def router_env(request):
         infra = NetnsRouterInfra()
     elif infra_type == "vrf":
         infra = VrfRouterInfra()
-    else:
-        raise ValueError(f"Unknown infra: {infra_type}")
+    elif infra_type == "libvirt":
+        pytest.skip(f"router_env does not support libvirt, current: {infra_type}")
     try:
         infra.setup()
         yield infra
@@ -74,16 +81,9 @@ def rocev2_env(request):
     Automatically calls setup_rdma() after infrastructure setup.
     """
     infra_type = request.config.getoption("--infra")
-
-    if infra_type == "libvirt":
-        infra = LibvirtClientServerInfra()
-    elif infra_type == "netns":
-        infra = NetnsClientServerInfra()
-    elif infra_type == "vrf":
-        infra = VrfClientServerInfra()
-    else:
-        raise ValueError(f"Unknown infra for rocev2: {infra_type}")
-
+    if infra_type != "libvirt":
+        pytest.skip(f"rocev2_env requires --infra=libvirt, current: {infra_type}")
+    infra = LibvirtClientServerInfra()
     try:
         infra.setup()
         infra.setup_rdma()
