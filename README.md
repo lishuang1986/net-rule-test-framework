@@ -1,19 +1,118 @@
 # Net-Rule Test Framework
 
+[![Netns CI](https://github.com/lishuang1986/net-rule-test-framework/actions/workflows/CI-netns.yaml/badge.svg)](https://github.com/lishuang1986/net-rule-test-framework/actions/workflows/CI-netns.yaml)
 [![TC CI](https://github.com/lishuang1986/net-rule-test-framework/actions/workflows/CI-TC.yaml/badge.svg)](https://github.com/lishuang1986/net-rule-test-framework/actions/workflows/CI-TC.yaml)
+[![FW CI](https://github.com/lishuang1986/net-rule-test-framework/actions/workflows/CI-FW.yaml/badge.svg)](https://github.com/lishuang1986/net-rule-test-framework/actions/workflows/CI-FW.yaml)
 
-**Network Rule Automation Testing Framework**
+**Write once. Run across netns, VRF, and VMs.**
 
 ## Overview
 
 Automation testing framework for Linux network **rules** – iptables, TC, and beyond.
 
-The provided examples illustrate usage with **Netfilter/iptables** and **TC**. The same test structure applies to other rule‑based subsystems (e.g., OVS flows, OVN ACLs). The framework separates rule logic from environment setup, making it easy to add new rule types and backends.
+The framework decouples **topology** (how nodes are connected) from **infrastructure** (how nodes are executed). A test defines traffic patterns against a topology, and the same test can run across different infrastructure backends without modification. The provided examples illustrate usage with **Firewall** and **TC** rules, and the same structure applies to other rule‑based subsystems (e.g., OVS flows, OVN ACLs).
+
+Without this abstraction, testing a single TC rule across netns, VRF, and VMs would require three separate test scripts with duplicated logic.
+
+```
+┌─────────────────────────────────────┐
+│              Test Cases             │
+│     (pytest, topology-agnostic)     │
+├─────────────────────────────────────┤
+│           Topology Layer            │
+│   Client-Server | Router | ...      │
+├─────────────────────────────────────┤
+│        Infrastructure Layer         │
+│        Netns | VRF | Libvirt        │
+└─────────────────────────────────────┘
+```
+
+## Test Suites
+
+The project currently includes the following test suites:
+
+- **TC** — Traffic Control rule tests (`tests/tc/`)<br>
+  Example: u32 match validation, demonstrating cross-backend rule testing
+- **Firewall** — iptables and nftables rule tests (`tests/firewall/`)<br>
+  Examples: drop, conntrack, cgroupv2 meta matching — verifying the framework's rule-type extensibility
+- **RoCEv2** — RDMA/RoCEv2 experiments and tests (`tests/rocev2/`) — **primary focus**<br>
+  Transport comparison (RC/UC/UD), completion modes, perf profiling, kernel tracing. See [README](tests/rocev2/README.md) for details.
+
+## Topology
+
+### Client-Server
+
+Two directly connected nodes on the same subnet:
+
+```
+┌──────────┐                    ┌──────────┐
+│  client  │────────────────────│  server  │
+│ 10.0.0.2 │                    │ 10.0.0.1 │
+└──────────┘                    └──────────┘
+```
+
+All traffic flows directly between the pair.
+
+### Router
+
+Three nodes forming two isolated subnets connected through a router:
+
+```
+┌──────────┐  10.0.1.0/24   ┌──────────┐  10.0.2.0/24   ┌──────────┐
+│  client  │────────────────│  router  │────────────────│  server  │
+│ 10.0.1.2 │                │ 10.0.1.1 │                │ 10.0.2.2 │
+└──────────┘                │ 10.0.2.1 │                └──────────┘
+                            └──────────┘
+```
+
+Traffic from client to server must be routed through the router node.
+
+### Host-Router
+
+Derived from **Router** topology. The router role is played by the host machine itself:
+
+```
+┌──────────┐              ┌───────────────┐              ┌──────────┐
+│  client  │──────────────│  host/router  │──────────────│  server  │
+│   veth   │              │  (localhost)  │              │   veth   │
+└──────────┘              └───────────────┘              └──────────┘
+```
+
+The host's network stack performs routing/forwarding, allowing tests to validate local network rules (iptables, TC, etc.) in a controlled environment.
+
+### RoCEv2
+
+Derived from **Client-Server** topology. Both nodes are equipped with RDMA-capable devices:
+
+```
+┌──────────┐                 RDMA                 ┌──────────┐
+│  client  │══════════════════════════════════════│  server  │
+│  (RXE)   │                                      │  (RXE)   │
+└──────────┘                                      └──────────┘
+```
+
+Uses libvirt VMs with SoftRoCE (RXE) for RDMA communication over Converged Ethernet.
+
+## Infrastructure
 
 Supported backends:
 - Netns (network namespaces)
-- VRF (Virtual Routing and Forwarding) – **POC**
-- Libvirt VMs (Fedora/RHEL/CentOS based) – **WIP**
+- VRF (Virtual Routing and Forwarding) — basic support
+- Libvirt VMs (Fedora/RHEL/CentOS based) — used for RoCEv2/RDMA tests
+
+### Base Topologies
+
+| Topology / Infra | netns | vrf         | libvirt |
+|------------------|-------|-------------|---------|
+| Client-Server    | ✅    | ✅ (POC)    | ✅      |
+| Router           | ✅    | ✅ (POC)    | ❌      |
+
+### Derived Topologies (from base topologies above)
+
+| Topology / Infra | netns | vrf | libvirt | Based on       |
+|------------------|-------|-----|---------|----------------|
+| Host-Router      | ✅    | ❌  | ❌      | Router         |
+| RoCEv2           | ❌    | ❌  | ✅      | Client-Server  |
 
 ## Quick Start
 
@@ -26,24 +125,24 @@ pip install -r requirements.txt
 # Run tests with netns (default)
 pytest --infra=netns
 
-# Run tests with VRF (experimental)
+# Run tests with VRF (POC)
 pytest --infra=vrf
+
+# Run tests with Libvirt VMs (requires Fedora image prepared)
+pytest --infra=libvirt
 
 # Run all tests with verbose output and generate an HTML report
 pytest tests -vv --html=report.html
 
-# Run only netfilter tests
-pytest tests/netfilter/ --infra=netns
+# Run only firewall tests
+pytest tests/firewall/
 
 # Run only TC u32 match test
 pytest tests/tc/test_u32_match.py -vv -s
 
-# Run RoCEv2 tests with libvirt infra (requires rdma-core and perftest installed)
+# Run RoCEv2 tests with libvirt infra
 pytest tests/rocev2/test_rocev2.py --infra=libvirt -vv -s
 # Note: netns infra currently does not support RoCEv2 tests
-
-# Run tests with Libvirt VMs (requires Fedora image prepared)
-pytest --infra=libvirt
 ```
 
 ### Libvirt VM Environment Setup
@@ -91,7 +190,7 @@ See `framework/infra/netns/` for an example netns implementation.
 
 ## Author
 
-This project is designed and implemented entirely by **Li Shuang** as a demonstration of testing framework architecture.
+Designed and implemented by **Li Shuang**.
 
 ## License
 
