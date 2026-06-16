@@ -108,6 +108,45 @@ class LibvirtClientServerInfra(ClientServerTopo, BaseInfra):
 
         return self._logical_to_ip.copy()
 
+    def cleanup(self):
+        # Stop and undefine VMs
+        for vm_name in self._created_vms:
+            subprocess.run(f"virsh shutdown {vm_name}", shell=True, stderr=subprocess.DEVNULL)
+            # Wait for VM to stop
+            for _ in range(30):
+                result = subprocess.run(f"virsh domstate {vm_name}", shell=True, capture_output=True, text=True)
+                if "shut off" in result.stdout:
+                    break
+                time.sleep(1)
+            subprocess.run(f"virsh undefine {vm_name}", shell=True, stderr=subprocess.DEVNULL)
+
+        # Remove disk images (but keep base image and marker)
+        for disk in self._created_disks:
+            if os.path.exists(disk):
+                subprocess.run(f"rm -f {disk}", shell=True, stderr=subprocess.DEVNULL)
+
+        # Restore libvirtd to its original state
+        if not self._libvirtd_was_active:
+            if BaseInfra.verbose:
+                print("[INFO] Stopping libvirtd (restoring original state)")
+            subprocess.run("systemctl stop libvirtd", shell=True, stderr=subprocess.DEVNULL)
+
+    def setup_rdma(self):
+        """Setup RDMA (rdma_rxe) on client and server VMs"""
+        for node_name in ["client", "server"]:
+            node = getattr(self, node_name.capitalize())
+            iface = node.get_iface()
+            if BaseInfra.verbose:
+                print(f"[INFO] Setting up RDMA on {node_name} (iface={iface})")
+            # Load rdma_rxe kernel module
+            node.run("modprobe rdma_rxe")
+            # Add rxe device (ignore error if already exists)
+            node.run(f"rdma link add rxe_{node_name} type rxe netdev {iface} 2>/dev/null || true")
+            # Show RDMA link status with GID info
+            node.run("rdma link show -d")
+            # Also show GID table from sysfs
+            node.run(f"cat /sys/class/infiniband/rxe_{node_name}/ports/1/gids/2")
+
     def _cleanup_vm(self, vm_name):
         """Clean up a single VM by name"""
         # Check if VM exists
@@ -142,29 +181,6 @@ class LibvirtClientServerInfra(ClientServerTopo, BaseInfra):
                 if BaseInfra.verbose:
                     print(f"[INFO] Removing leftover disk: {disk_path}")
                 subprocess.run(f"rm -f {disk_path}", shell=True, stderr=subprocess.DEVNULL)
-
-    def cleanup(self):
-        # Stop and undefine VMs
-        for vm_name in self._created_vms:
-            subprocess.run(f"virsh shutdown {vm_name}", shell=True, stderr=subprocess.DEVNULL)
-            # Wait for VM to stop
-            for _ in range(30):
-                result = subprocess.run(f"virsh domstate {vm_name}", shell=True, capture_output=True, text=True)
-                if "shut off" in result.stdout:
-                    break
-                time.sleep(1)
-            subprocess.run(f"virsh undefine {vm_name}", shell=True, stderr=subprocess.DEVNULL)
-
-        # Remove disk images (but keep base image and marker)
-        for disk in self._created_disks:
-            if os.path.exists(disk):
-                subprocess.run(f"rm -f {disk}", shell=True, stderr=subprocess.DEVNULL)
-
-        # Restore libvirtd to its original state
-        if not self._libvirtd_was_active:
-            if BaseInfra.verbose:
-                print("[INFO] Stopping libvirtd (restoring original state)")
-            subprocess.run("systemctl stop libvirtd", shell=True, stderr=subprocess.DEVNULL)
 
     def _check_host_environment(self):
         """Check libvirtd is running and default network is active"""
@@ -424,19 +440,3 @@ class LibvirtClientServerInfra(ClientServerTopo, BaseInfra):
             node.run(f"ip -6 addr add {ipv6_with_prefix} dev {iface}")
             # Store IPv6 address without prefix
             self._logical_to_ipv6[node_name] = ipv6_with_prefix.split('/')[0]
-
-    def setup_rdma(self):
-        """Setup RDMA (rdma_rxe) on client and server VMs"""
-        for node_name in ["client", "server"]:
-            node = getattr(self, node_name.capitalize())
-            iface = node.get_iface()
-            if BaseInfra.verbose:
-                print(f"[INFO] Setting up RDMA on {node_name} (iface={iface})")
-            # Load rdma_rxe kernel module
-            node.run("modprobe rdma_rxe")
-            # Add rxe device (ignore error if already exists)
-            node.run(f"rdma link add rxe_{node_name} type rxe netdev {iface} 2>/dev/null || true")
-            # Show RDMA link status with GID info
-            node.run("rdma link show -d")
-            # Also show GID table from sysfs
-            node.run(f"cat /sys/class/infiniband/rxe_{node_name}/ports/1/gids/2")

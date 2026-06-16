@@ -36,7 +36,8 @@ The project currently includes the following test suites:
 - **Firewall** — iptables and nftables rule tests (`tests/firewall/`)<br>
   Examples: drop, conntrack, cgroupv2 meta matching — verifying the framework's rule-type extensibility
 - **RoCEv2** — RDMA/RoCEv2 experiments and tests (`tests/rocev2/`) — **primary focus**<br>
-  Transport comparison (RC/UC/UD), completion modes, perf profiling, kernel tracing. See [README](tests/rocev2/README.md) for details.
+  Protocol behavior, performance methodology, and deep inspection — across transports, completion modes, and benchmarks.<br>
+  Reuses the Client-Server topology on libvirt VMs with SoftRoCE (RXE). Netns/VRF backends do not support RDMA. See [README](tests/rocev2/README.md) for details.
 
 ## Topology
 
@@ -80,19 +81,6 @@ Derived from **Router** topology. The router role is played by the host machine 
 
 The host's network stack performs routing/forwarding, allowing tests to validate local network rules (iptables, TC, etc.) in a controlled environment.
 
-### RoCEv2
-
-Derived from **Client-Server** topology. Both nodes are equipped with RDMA-capable devices:
-
-```
-┌──────────┐                 RDMA                 ┌──────────┐
-│  client  │══════════════════════════════════════│  server  │
-│  (RXE)   │                                      │  (RXE)   │
-└──────────┘                                      └──────────┘
-```
-
-Uses libvirt VMs with SoftRoCE (RXE) for RDMA communication over Converged Ethernet.
-
 ## Infrastructure
 
 Supported backends:
@@ -112,7 +100,6 @@ Supported backends:
 | Topology / Infra | netns | vrf | libvirt | Based on       |
 |------------------|-------|-----|---------|----------------|
 | Host-Router      | ✅    | ❌  | ❌      | Router         |
-| RoCEv2           | ❌    | ❌  | ✅      | Client-Server  |
 
 ## Quick Start
 

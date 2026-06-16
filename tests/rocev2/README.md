@@ -102,9 +102,8 @@ Uses `rping` for RDMA ping-pong with:
 
 ## Limitations
 
-- **CI environment**: These tests require RDMA-capable environments (physical hardware or nested virtualization) and cannot run on standard CI platforms like GitHub Actions.
-- **SoftRoCE emulation**: All experiments use SoftRoCE (RXE) software emulation. Performance characteristics (latency, bandwidth, congestion behavior) differ from hardware RDMA NICs (e.g., Mellanox ConnectX). The value lies in protocol understanding and measurement methodology, not absolute performance numbers.
-
+- **Infrastructure dependency**: RoCEv2 tests require `--infra=libvirt`. The netns and VRF backends do not support RDMA — only libvirt's `ClientServerInfra` configures SoftRoCE on VMs. This limits RoCEv2 tests to VM environments.
+- **CI feasibility**: These tests require RDMA-capable environments (physical hardware or nested virtualization) and cannot run on typical CI platforms.
 
 ## Running
 
