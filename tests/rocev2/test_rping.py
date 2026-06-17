@@ -9,10 +9,11 @@ pytestmark = [pytest.mark.rocev2]
 def test_rping_ipv4(rocev2_env):
     """Test RDMA connectivity between client and server using rping"""
     server_ip = rocev2_env.Server.get_ipv4()
+    client_if = rocev2_env.Client.get_iface()
 
     # Start tcpdump in background to capture RoCEv2 traffic (UDP port 4791)
     tcpdump_proc = rocev2_env.Client.run(
-        "tcpdump -U -i ens3 udp port 4791 -w /tmp/rping_rocev2.pcap", background=True
+        f"tcpdump -U -i {client_if} udp port 4791 -w /tmp/rping_rocev2.pcap", background=True
     )
     time.sleep(1)
 

@@ -1,5 +1,6 @@
 # Net-Rule Test Framework
 
+[![Core CI](https://github.com/lishuang1986/net-rule-test-framework/actions/workflows/CI-core.yaml/badge.svg)](https://github.com/lishuang1986/net-rule-test-framework/actions/workflows/CI-core.yaml)
 [![Netns CI](https://github.com/lishuang1986/net-rule-test-framework/actions/workflows/CI-netns.yaml/badge.svg)](https://github.com/lishuang1986/net-rule-test-framework/actions/workflows/CI-netns.yaml)
 [![TC CI](https://github.com/lishuang1986/net-rule-test-framework/actions/workflows/CI-TC.yaml/badge.svg)](https://github.com/lishuang1986/net-rule-test-framework/actions/workflows/CI-TC.yaml)
 [![FW CI](https://github.com/lishuang1986/net-rule-test-framework/actions/workflows/CI-FW.yaml/badge.svg)](https://github.com/lishuang1986/net-rule-test-framework/actions/workflows/CI-FW.yaml)
@@ -101,13 +102,45 @@ Supported backends:
 |------------------|-------|-----|---------|----------------|
 | Host-Router      | ✅    | ❌  | ❌      | Router         |
 
+## Prerequisites
+
+### System Packages
+
+```bash
+# Fedora / RHEL / CentOS
+sudo dnf install -y python3-pip libcgroup-tools iproute-tc iptables nftables \
+    tcpdump wireshark \
+    libibverbs-utils librdmacm-utils infiniband-diags
+
+# Ubuntu / Debian
+sudo apt-get update
+sudo apt-get install -y python3-pip cgroup-tools iproute2 iptables nftables iputils-ping \
+    tcpdump tshark \
+    libibverbs-utils librdmacm-utils infiniband-diags
+```
+
+Or run the setup script which handles both distributions:
+
+```bash
+./scripts/setup.sh
+```
+
+> **RoCEv2 / RDMA tests** require Libvirt VMs. The framework automatically installs RDMA packages (`libibverbs-utils`, `librdmacm-utils`, `perftest`, etc.) inside the VMs via `virt-customize`. The host packages listed above are for running diagnostics on the host side.
+
+### Python
+
+It is recommended to use a virtual environment:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
 ## Quick Start
 
 ```bash
 # Run all commands from the project root
-
-# Install dependencies
-pip install -r requirements.txt
 
 # Run tests with netns (default)
 pytest --infra=netns
@@ -167,13 +200,46 @@ Thanks to the layered design (Topology / Infrastructure separation), you can eas
 1. Create a new infra class inheriting `BaseInfra`.
 2. Implement `setup()` to create the environment (e.g., start containers, allocate IPs).
 3. Implement `cleanup()` to tear down resources.
-4. Implement node‑specific `run()` methods (e.g., via `docker exec`, `ssh`).
+4. Implement node‑specific `run()` and `get()` methods (e.g., via `docker exec`, `ssh`).
+
+See `framework/infra/netns/` for an example netns implementation.
 
 ### Adding a new rule type (e.g., XDP, eBPF, OVS flows)
 - Define a new topology class (if needed) or extend node behaviour.
 - The existing fixtures and environment management remain fully reusable.
 
-See `framework/infra/netns/` for an example netns implementation.
+### The class hierarchy
+
+```
+                      Node (ABC)
+                     run() / get()
+          ┌───────────┼────────┼────────────┐
+          │           │        │            │
+          ▼           ▼        ▼            ▼
+        NetnsNode  VrfNode  HostNode  LibvirtVMNode
+
+
+ClientServerTopo (ABC)                BaseInfra (ABC)
+  Client (Node)     Server (Node)    setup() / cleanup()
+         │                │                  │
+         └────────────────┼──────────────────┘
+                          │
+              ┌───────────┼───────────┐
+              ▼           ▼           ▼
+       NetnsClient   VrfClient    LibvirtClient
+       ServerInfra   ServerInfra  ServerInfra
+
+
+RouterTopo (ABC)                                  (same BaseInfra)
+  Client (Node)   Router (Node)     Server (Node)
+       │               │                  │                │
+       └───────────────┼──────────────────┼────────────────┘
+                       │                  │
+              ┌────────┘                  └────────┐
+              ▼                                    ▼
+      NetnsRouterInfra                    NetnsHostRouterInfra
+      VrfRouterInfra
+```
 
 ## Author
 
