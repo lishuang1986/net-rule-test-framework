@@ -131,22 +131,6 @@ class LibvirtClientServerInfra(ClientServerTopo, BaseInfra):
                 print("[INFO] Stopping libvirtd (restoring original state)")
             subprocess.run("systemctl stop libvirtd", shell=True, stderr=subprocess.DEVNULL)
 
-    def setup_rdma(self):
-        """Setup RDMA (rdma_rxe) on client and server VMs"""
-        for node_name in ["client", "server"]:
-            node = getattr(self, node_name.capitalize())
-            iface = node.get_iface()
-            if BaseInfra.verbose:
-                print(f"[INFO] Setting up RDMA on {node_name} (iface={iface})")
-            # Load rdma_rxe kernel module
-            node.run("modprobe rdma_rxe")
-            # Add rxe device (ignore error if already exists)
-            node.run(f"rdma link add rxe_{node_name} type rxe netdev {iface} 2>/dev/null || true")
-            # Show RDMA link status with GID info
-            node.run("rdma link show -d")
-            # Also show GID table from sysfs
-            node.run(f"cat /sys/class/infiniband/rxe_{node_name}/ports/1/gids/2")
-
     def _cleanup_vm(self, vm_name):
         """Clean up a single VM by name"""
         # Check if VM exists

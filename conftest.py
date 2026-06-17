@@ -81,9 +81,12 @@ def rocev2_env(request):
     Automatically calls setup_rdma() after infrastructure setup.
     """
     infra_type = request.config.getoption("--infra")
-    if infra_type != "libvirt":
-        pytest.skip(f"rocev2_env requires --infra=libvirt, current: {infra_type}")
-    infra = LibvirtClientServerInfra()
+    if infra_type == "netns":
+        infra = NetnsClientServerInfra()
+    elif infra_type == "vrf":
+        pytest.skip(f"rocev2_env does not support vrf, current: {infra_type}")
+    elif infra_type == "libvirt":
+        infra = LibvirtClientServerInfra()
     try:
         infra.setup()
         infra.setup_rdma()

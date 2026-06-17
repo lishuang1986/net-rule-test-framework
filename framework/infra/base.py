@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 import subprocess
 import time
 from typing import Dict
+from ..topo.node import Node
 
 
 class BaseInfra(ABC):
@@ -64,7 +65,7 @@ class BaseInfra(ABC):
         return result
 
 
-class NetnsNode:
+class NetnsNode(Node):
     """Base class for netns nodes, provides common run() implementation"""
     def __init__(self, executor, name: str, tag: str):
         self._executor = executor
@@ -116,7 +117,7 @@ class NetnsNode:
         return False
 
 
-class VrfNode:
+class VrfNode(Node):
     """Base class for VRF nodes, executes commands via ip vrf exec"""
     def __init__(self, executor, name: str, tag: str):
         self._executor = executor
@@ -168,7 +169,7 @@ class VrfNode:
         return False
 
 
-class HostNode:
+class HostNode(Node):
     """Base class for local host nodes, executes commands directly (no netns)"""
     def __init__(self, executor, name: str, tag: str):
         self._executor = executor
@@ -215,7 +216,7 @@ class HostNode:
         return False
 
 
-class LibvirtVMNode:
+class LibvirtVMNode(Node):
     """Node that executes commands via SSH on a libvirt VM.
 
     Currently supports Fedora/RHEL/CentOS based VMs with:
