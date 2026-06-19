@@ -15,7 +15,7 @@ class ClientServerTopo(ABC):
             node.run("modprobe rdma_rxe")
             node.run(f"rdma link add {rdma_dev} type rxe netdev {iface} 2>/dev/null || true")
             node.run("rdma link show -d")
-            node.run(f"cat /sys/class/infiniband/{rdma_dev}/ports/1/gids/2")
+            node.run("show_gids")
 
     class Client(Node):
         def get_iface_rdma(self) -> str:

@@ -158,7 +158,7 @@ pytest tests -vv --html=report.html
 pytest tests/firewall/
 
 # Run only TC u32 match test
-pytest tests/tc/test_u32_match.py -vv -s
+pytest tests/tc/test_filter_u32.py -vv -s
 
 # Run RoCEv2 tests with libvirt infra
 pytest tests/rocev2/test_rocev2.py --infra=libvirt -vv -s

@@ -150,6 +150,8 @@ def test_ib_write_bw_bench_by_QP(rocev2_env):
         (2, "2QP"),
         (4, "4QP"),
         (8, "8QP"),
+        (16, "16QP"),
+        (32, "32QP"),
     ]
 
     labels = []
@@ -190,6 +192,166 @@ def test_ib_write_bw_bench_by_QP(rocev2_env):
     # ========================================
     print(f"\n{'=' * 70}")
     print(f"ib_write_bw Bandwidth Comparison by QP count:")
+    print(f"{'=' * 70}")
+    h = (f"{'QP':<8} {'Iterations':<12} {'BW peak':<16} {'BW avg':<16} {'MsgRate':<12}")
+    sep = "-" * len(h)
+    print(h)
+    print(sep)
+    for label, d in zip(labels, bw_data_list):
+        _iters = str(d.get('iterations', 'N/A'))
+        _peak  = f"{d.get('bw_peak_mb_sec', 0):.2f} MB/s" if d.get('bw_peak_mb_sec') else 'N/A'
+        _avg   = f"{d.get('bw_avg_mb_sec', 0):.2f} MB/s" if d.get('bw_avg_mb_sec') else 'N/A'
+        _rate  = f"{d.get('msg_rate_mpps', 0):.6f}" if d.get('msg_rate_mpps') else 'N/A'
+        print(f"{label:<8} {_iters:<12} {_peak:<16} {_avg:<16} {_rate:<12}")
+    print(f"{'=' * 70}")
+
+
+def test_ib_write_bw_bench_netem_loss(rocev2_env):
+    """Benchmark ib_write_bw bandwidth with and without netem packet loss.
+
+    Runs ib_write_bw under different netem loss rates on the client interface
+    and prints a comparison table showing the performance impact of packet loss
+    on RDMA Write bandwidth.
+    """
+    server_ip = rocev2_env.Server.get_ipv4()
+    client_iface = rocev2_env.Client.get_iface()
+
+    # Loss rates to test: (percentage, label)
+    loss_values = [
+        (0.0, "0%"),
+        (0.01, "0.01%"),
+        (0.05, "0.05%"),
+        (0.1, "0.1%"),
+        (0.5, "0.5%"),
+    ]
+
+    labels = []
+    bw_data_list = []
+
+    for loss_pct, label in loss_values:
+        print(f"\n--- Testing netem loss: {label} ---")
+
+        # Apply netem loss on the client egress (affects RDMA Write data path)
+        if loss_pct > 0:
+            rocev2_env.Client.run(
+                f"tc qdisc add dev {client_iface} root netem loss {loss_pct}%"
+            )
+
+        server_proc = rocev2_env.Server.run(
+            f"ib_write_bw -d rxe_server -R -x 1 "
+            f"> /tmp/ib_write_bw_server_loss{label}.log 2>&1",
+            background=True
+        )
+        time.sleep(2)
+        try:
+            rocev2_env.Client.run(
+                f"ib_write_bw -d rxe_client -R -x 1 {server_ip} "
+                f"> /tmp/ib_write_bw_client_loss{label}.log 2>&1"
+            )
+        finally:
+            server_proc.terminate()
+            server_proc.wait()
+
+            # Clean up netem qdisc if applied
+            if loss_pct > 0:
+                rocev2_env.Client.run(f"tc qdisc del dev {client_iface} root")
+
+        # Parse client output to get bandwidth metrics
+        bw_data = parse_ib_write_bw_output(
+            rocev2_env.Client, f"/tmp/ib_write_bw_client_loss{label}.log"
+        )
+        labels.append(label)
+        bw_data_list.append(bw_data)
+
+        bw_avg = bw_data.get('bw_avg_mb_sec', 0)
+        bw_peak = bw_data.get('bw_peak_mb_sec', 0)
+        msgs = bw_data.get('iterations', 0)
+        print(f"  Iterations: {msgs}, BW avg: {bw_avg:.2f} MB/sec, BW peak: {bw_peak:.2f} MB/sec")
+
+    # ========================================
+    # Bandwidth comparison table
+    # ========================================
+    print(f"\n{'=' * 70}")
+    print(f"ib_write_bw Bandwidth Comparison (netem loss):")
+    print(f"{'=' * 70}")
+    h = (f"{'Loss':<8} {'Iterations':<12} {'BW peak':<16} {'BW avg':<16} {'MsgRate':<12}")
+    sep = "-" * len(h)
+    print(h)
+    print(sep)
+    for label, d in zip(labels, bw_data_list):
+        _iters = str(d.get('iterations', 'N/A'))
+        _peak  = f"{d.get('bw_peak_mb_sec', 0):.2f} MB/s" if d.get('bw_peak_mb_sec') else 'N/A'
+        _avg   = f"{d.get('bw_avg_mb_sec', 0):.2f} MB/s" if d.get('bw_avg_mb_sec') else 'N/A'
+        _rate  = f"{d.get('msg_rate_mpps', 0):.6f}" if d.get('msg_rate_mpps') else 'N/A'
+        print(f"{label:<8} {_iters:<12} {_peak:<16} {_avg:<16} {_rate:<12}")
+    print(f"{'=' * 70}")
+
+
+def test_ib_write_bw_bench_netem_loss_qp(rocev2_env):
+    """Benchmark ib_write_bw bandwidth with 0.1% netem loss, sweeping QP depth.
+
+    Under a fixed 0.1% packet loss, sweeps QP counts from 1 to 128 to find
+    the inflection point where bandwidth stops improving or starts degrading.
+    """
+    server_ip = rocev2_env.Server.get_ipv4()
+    client_iface = rocev2_env.Client.get_iface()
+    loss_pct = 0.1
+
+    # QP values to sweep under loss
+    qp_values = [
+        (1, "q1"),
+        (4, "q4"),
+        (8, "q8"),
+        (16, "q16"),
+    ]
+
+    labels = []
+    bw_data_list = []
+
+    # Apply netem loss once for the whole benchmark
+    rocev2_env.Client.run(
+        f"tc qdisc add dev {client_iface} root netem loss {loss_pct}%"
+    )
+
+    try:
+        for qp_count, label in qp_values:
+            print(f"\n--- Testing QP count: {label} @ {loss_pct}% loss ---")
+
+            server_proc = rocev2_env.Server.run(
+                f"ib_write_bw -d rxe_server -R -x 1 -q {qp_count} "
+                f"> /tmp/ib_write_bw_server_loss{label}.log 2>&1",
+                background=True
+            )
+            time.sleep(2)
+            try:
+                rocev2_env.Client.run(
+                    f"ib_write_bw -d rxe_client -R -x 1 -q {qp_count} {server_ip} "
+                    f"> /tmp/ib_write_bw_client_loss{label}.log 2>&1"
+                )
+            finally:
+                server_proc.terminate()
+                server_proc.wait()
+
+            # Parse client output to get bandwidth metrics
+            bw_data = parse_ib_write_bw_output(
+                rocev2_env.Client, f"/tmp/ib_write_bw_client_loss{label}.log"
+            )
+            labels.append(label)
+            bw_data_list.append(bw_data)
+
+            bw_avg = bw_data.get('bw_avg_mb_sec', 0)
+            bw_peak = bw_data.get('bw_peak_mb_sec', 0)
+            msgs = bw_data.get('iterations', 0)
+            print(f"  Iterations: {msgs}, BW avg: {bw_avg:.2f} MB/sec, BW peak: {bw_peak:.2f} MB/sec")
+    finally:
+        # Clean up netem qdisc
+        rocev2_env.Client.run(f"tc qdisc del dev {client_iface} root")
+
+    # ========================================
+    # Bandwidth comparison table
+    # ========================================
+    print(f"\n{'=' * 70}")
+    print(f"ib_write_bw Bandwidth Comparison (0.1% loss, QP sweep q1~q128):")
     print(f"{'=' * 70}")
     h = (f"{'QP':<8} {'Iterations':<12} {'BW peak':<16} {'BW avg':<16} {'MsgRate':<12}")
     sep = "-" * len(h)

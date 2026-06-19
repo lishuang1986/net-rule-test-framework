@@ -4,7 +4,7 @@ import pytest
 from framework.helpers import is_100_percent_loss
 
 @pytest.mark.tc
-def test_u32_match_icmp_ipv4(client_server_env):
+def test_filter_u32_icmp_ipv4(client_server_env):
     """
     Test TC u32 matcher matching ICMP packets and dropping them
     Includes: pass when no match, egress match drop, ingress match drop
@@ -84,7 +84,7 @@ def test_u32_match_icmp_ipv4(client_server_env):
     infra.Client.run(f"tc qdisc del dev {client_iface} clsact")
 
 @pytest.mark.tc
-def test_u32_match_icmp_ipv6(client_server_env):
+def test_filter_u32_icmp_ipv6(client_server_env):
     """
     Test TC u32 matcher matching IPv6 ICMPv6 packets and dropping them
     Includes: pass when no match, egress match drop, ingress match drop

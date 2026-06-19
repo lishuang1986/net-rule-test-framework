@@ -83,7 +83,7 @@ def test_ibv_rc_pingpong_ipv6(rocev2_env):
     try:
         # Run client and redirect output to file
         rocev2_env.Client.run(
-            f"ibv_rc_pingpong -d rxe_client -g 2 -n 3 > /tmp/pingpong_client_ipv6.log 2>&1"
+            f"ibv_rc_pingpong -d rxe_client -g 2 -n 3 {server_ipv6} > /tmp/pingpong_client_ipv6.log 2>&1"
         )
     finally:
         server_proc.terminate()
@@ -141,12 +141,12 @@ def test_ibv_rc_pingpong_bench_by_size(rocev2_env):
         labels.append(label)
         client_data_list.append(client_data)
         server_data_list.append(server_data)
-        t_client = client_data['total_time_sec']
-        t_server = server_data['total_time_sec']
-        client_latencies.append(t_client / iterations)
-        server_latencies.append(t_server / iterations)
-        print(f"  Client total: {t_client:.6f}s, Latency per iter: {t_client/iterations:.6f}s")
-        print(f"  Server total: {t_server:.6f}s, Latency per iter: {t_server/iterations:.6f}s")
+        client_lat = client_data.get('usec_iter', 0)
+        server_lat = server_data.get('usec_iter', 0)
+        client_latencies.append(client_lat)
+        server_latencies.append(server_lat)
+        print(f"  Client usec/iter: {client_lat:.2f}")
+        print(f"  Server usec/iter: {server_lat:.2f}")
 
     # ========================================
     # Plot latency comparison
@@ -160,7 +160,7 @@ def test_ibv_rc_pingpong_bench_by_size(rocev2_env):
     plotext.xticks(x_indices, labels)
     plotext.title('ibv_rc_pingpong Latency by Message Size')
     plotext.xlabel('Message Size')
-    plotext.ylabel('Latency per Iteration (sec)')
+    plotext.ylabel('Latency per Iteration (usec)')
     plotext.show()
 
     # ========================================
