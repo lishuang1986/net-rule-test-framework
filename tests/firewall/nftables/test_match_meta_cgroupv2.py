@@ -5,7 +5,7 @@ from framework.helpers import is_100_percent_loss
 
 
 @pytest.mark.netfilter
-def test_nft_match_meta_cgroupv2_ipv4(host_router_env):
+def test_match_meta_cgroupv2_ipv4(host_router_env):
     """Verify nftables cgroupv2 match drops ICMP echo-request on OUTPUT chain (IPv4)
 
     Steps (mirroring manual test sequence):

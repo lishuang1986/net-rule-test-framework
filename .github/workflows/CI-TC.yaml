@@ -30,7 +30,7 @@ jobs:
         run: |
           apt-get update
           apt-get install -y python3-pip iproute2 iputils-ping
-          pip install pytest
+          pip install pytest scipy
 
       - name: Run TC tests
         run: |

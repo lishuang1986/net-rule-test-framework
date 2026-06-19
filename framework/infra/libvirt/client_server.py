@@ -254,7 +254,7 @@ class LibvirtClientServerInfra(ClientServerTopo, BaseInfra):
             f"--run-command 'dnf update -y' "
             f"--run-command 'dnf remove -y kernel-debuginfo-common kernel-debuginfo || true' "
             f"--run-command 'dnf debuginfo-install -y kernel' "
-            f"--run-command 'dnf install -y kernel-modules perftest' "
+            f"--run-command 'dnf install -y kernel-modules perftest mlnx-tools' "
             f"--run-command 'dnf install -y tcpdump wireshark trace-cmd perf' "
             f"--run-command 'dnf debuginfo-install -y libibverbs-utils libibverbs rdma-core' "
             f"--run-command 'dnf install -y libibverbs-utils librdmacm-utils rdma-core' "
