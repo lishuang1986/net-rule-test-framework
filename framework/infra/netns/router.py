@@ -4,16 +4,16 @@ import subprocess
 import uuid
 from typing import Dict
 from ...topo.router import RouterTopo
+from ...topo.node import Client, Router, Server
 from ..base import BaseInfra, NetnsNode
 
 
 class NetnsRouterInfra(RouterTopo, BaseInfra):
     """Netns-based Router topology"""
 
-    class Client(RouterTopo.Client, NetnsNode):
-        def __init__(self, executor):
-            self._name = "client"
-            NetnsNode.__init__(self, executor, self._name, "Client")
+    class _ClientNode(Client, NetnsNode):
+        def __init__(self, infra):
+            NetnsNode.__init__(self, infra, "client", "Client")
 
         def get_ipv4(self) -> str:
             return "192.168.1.2"
@@ -24,10 +24,9 @@ class NetnsRouterInfra(RouterTopo, BaseInfra):
         def get_iface(self) -> str:
             return "eth0"
 
-    class Router(RouterTopo.Router, NetnsNode):
-        def __init__(self, executor):
-            self._name = "router"
-            NetnsNode.__init__(self, executor, self._name, "Router")
+    class _RouterNode(Router, NetnsNode):
+        def __init__(self, infra):
+            NetnsNode.__init__(self, infra, "router", "Router")
 
         def get_ipv4_to_client(self) -> str:
             return "192.168.1.1"
@@ -47,10 +46,9 @@ class NetnsRouterInfra(RouterTopo, BaseInfra):
         def get_iface_to_server(self) -> str:
             return "eth1"
 
-    class Server(RouterTopo.Server, NetnsNode):
-        def __init__(self, executor):
-            self._name = "server"
-            NetnsNode.__init__(self, executor, self._name, "Server")
+    class _ServerNode(Server, NetnsNode):
+        def __init__(self, infra):
+            NetnsNode.__init__(self, infra, "server", "Server")
 
         def get_ipv4(self) -> str:
             return "192.168.2.2"
@@ -66,11 +64,23 @@ class NetnsRouterInfra(RouterTopo, BaseInfra):
         self._logical_to_physical: Dict[str, str] = {}
         self.veths = []
 
-        self.Client = self.Client(self)
-        self.Router = self.Router(self)
-        self.Server = self.Server(self)
+        self._client = self._ClientNode(self)
+        self._router = self._RouterNode(self)
+        self._server = self._ServerNode(self)
 
-    def setup(self) -> Dict[str, str]:
+    @property
+    def Client(self) -> _ClientNode:
+        return self._client
+
+    @property
+    def Router(self) -> _RouterNode:
+        return self._router
+
+    @property
+    def Server(self) -> _ServerNode:
+        return self._server
+
+    def setup(self) -> None:
         client_name = "client"
         router_name = "router"
         server_name = "server"
@@ -81,49 +91,48 @@ class NetnsRouterInfra(RouterTopo, BaseInfra):
             self._logical_to_physical[logical_node] = physical_name
 
         self._create_veth(client_name, router_name,
-                          self.Client.get_iface(), self.Router.get_iface_to_client())
+                          self._client.get_iface(), self._router.get_iface_to_client())
         self._create_veth(router_name, server_name,
-                          self.Router.get_iface_to_server(), self.Server.get_iface())
+                          self._router.get_iface_to_server(), self._server.get_iface())
 
         client_ns = self._logical_to_physical[client_name]
         router_ns = self._logical_to_physical[router_name]
         server_ns = self._logical_to_physical[server_name]
 
-        subprocess.run(f"ip netns exec {client_ns} ip addr add {self.Client.get_ipv4()}/24 dev {self.Client.get_iface()}", shell=True, check=True)
-        subprocess.run(f"ip netns exec {client_ns} ip -6 addr add {self.Client.get_ipv6()}/64 dev {self.Client.get_iface()}", shell=True, check=True)
-        subprocess.run(f"ip netns exec {client_ns} ip link set {self.Client.get_iface()} up", shell=True, check=True)
+        subprocess.run(f"ip netns exec {client_ns} ip addr add {self._client.get_ipv4()}/24 dev {self._client.get_iface()}", shell=True, check=True)
+        subprocess.run(f"ip netns exec {client_ns} ip -6 addr add {self._client.get_ipv6()}/64 dev {self._client.get_iface()}", shell=True, check=True)
+        subprocess.run(f"ip netns exec {client_ns} ip link set {self._client.get_iface()} up", shell=True, check=True)
         subprocess.run(f"ip netns exec {client_ns} ip link set lo up", shell=True, check=True)
-        subprocess.run(f"ip netns exec {client_ns} ip route add default via {self.Router.get_ipv4_to_client()}", shell=True, check=True)
-        subprocess.run(f"ip netns exec {client_ns} ip -6 route add default via {self.Router.get_ipv6_to_client()}", shell=True, check=True)
+        subprocess.run(f"ip netns exec {client_ns} ip route add default via {self._router.get_ipv4_to_client()}", shell=True, check=True)
+        subprocess.run(f"ip netns exec {client_ns} ip -6 route add default via {self._router.get_ipv6_to_client()}", shell=True, check=True)
 
-        subprocess.run(f"ip netns exec {router_ns} ip addr add {self.Router.get_ipv4_to_client()}/24 dev {self.Router.get_iface_to_client()}", shell=True, check=True)
-        subprocess.run(f"ip netns exec {router_ns} ip -6 addr add {self.Router.get_ipv6_to_client()}/64 dev {self.Router.get_iface_to_client()}", shell=True, check=True)
-        subprocess.run(f"ip netns exec {router_ns} ip link set {self.Router.get_iface_to_client()} up", shell=True, check=True)
-        subprocess.run(f"ip netns exec {router_ns} ip addr add {self.Router.get_ipv4_to_server()}/24 dev {self.Router.get_iface_to_server()}", shell=True, check=True)
-        subprocess.run(f"ip netns exec {router_ns} ip -6 addr add {self.Router.get_ipv6_to_server()}/64 dev {self.Router.get_iface_to_server()}", shell=True, check=True)
-        subprocess.run(f"ip netns exec {router_ns} ip link set {self.Router.get_iface_to_server()} up", shell=True, check=True)
+        subprocess.run(f"ip netns exec {router_ns} ip addr add {self._router.get_ipv4_to_client()}/24 dev {self._router.get_iface_to_client()}", shell=True, check=True)
+        subprocess.run(f"ip netns exec {router_ns} ip -6 addr add {self._router.get_ipv6_to_client()}/64 dev {self._router.get_iface_to_client()}", shell=True, check=True)
+        subprocess.run(f"ip netns exec {router_ns} ip link set {self._router.get_iface_to_client()} up", shell=True, check=True)
+        subprocess.run(f"ip netns exec {router_ns} ip addr add {self._router.get_ipv4_to_server()}/24 dev {self._router.get_iface_to_server()}", shell=True, check=True)
+        subprocess.run(f"ip netns exec {router_ns} ip -6 addr add {self._router.get_ipv6_to_server()}/64 dev {self._router.get_iface_to_server()}", shell=True, check=True)
+        subprocess.run(f"ip netns exec {router_ns} ip link set {self._router.get_iface_to_server()} up", shell=True, check=True)
         subprocess.run(f"ip netns exec {router_ns} ip link set lo up", shell=True, check=True)
         subprocess.run(f"ip netns exec {router_ns} sysctl -w net.ipv4.ip_forward=1", shell=True, check=True)
         subprocess.run(f"ip netns exec {router_ns} sysctl -w net.ipv6.conf.all.forwarding=1", shell=True, check=True)
 
-        subprocess.run(f"ip netns exec {server_ns} ip addr add {self.Server.get_ipv4()}/24 dev {self.Server.get_iface()}", shell=True, check=True)
-        subprocess.run(f"ip netns exec {server_ns} ip -6 addr add {self.Server.get_ipv6()}/64 dev {self.Server.get_iface()}", shell=True, check=True)
-        subprocess.run(f"ip netns exec {server_ns} ip link set {self.Server.get_iface()} up", shell=True, check=True)
+        subprocess.run(f"ip netns exec {server_ns} ip addr add {self._server.get_ipv4()}/24 dev {self._server.get_iface()}", shell=True, check=True)
+        subprocess.run(f"ip netns exec {server_ns} ip -6 addr add {self._server.get_ipv6()}/64 dev {self._server.get_iface()}", shell=True, check=True)
+        subprocess.run(f"ip netns exec {server_ns} ip link set {self._server.get_iface()} up", shell=True, check=True)
         subprocess.run(f"ip netns exec {server_ns} ip link set lo up", shell=True, check=True)
-        subprocess.run(f"ip netns exec {server_ns} ip route add default via {self.Router.get_ipv4_to_server()}", shell=True, check=True)
-        subprocess.run(f"ip netns exec {server_ns} ip -6 route add default via {self.Router.get_ipv6_to_server()}", shell=True, check=True)
+        subprocess.run(f"ip netns exec {server_ns} ip route add default via {self._router.get_ipv4_to_server()}", shell=True, check=True)
+        subprocess.run(f"ip netns exec {server_ns} ip -6 route add default via {self._router.get_ipv6_to_server()}", shell=True, check=True)
 
         self._health_check()
-        return self._logical_to_physical.copy()
 
     def _health_check(self):
-        self.Client._wait_for_ipv6_dad()
-        self.Router._wait_for_ipv6_dad()
-        self.Server._wait_for_ipv6_dad()
-        self.Client.run(f"ping -c 1 -W 1 {self.Server.get_ipv4()}")
-        self.Client.run(f"ping -c 1 -W 1 {self.Server.get_ipv6()}")
+        self._client._wait_for_ipv6_dad()
+        self._router._wait_for_ipv6_dad()
+        self._server._wait_for_ipv6_dad()
+        self._client.run(f"ping -c 1 -W 1 {self._server.get_ipv4()}")
+        self._client.run(f"ping -c 1 -W 1 {self._server.get_ipv6()}")
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         for veth, peer in self.veths:
             subprocess.run(f"ip link del {veth}", shell=True, stderr=subprocess.DEVNULL)
         for physical_ns in self._logical_to_physical.values():

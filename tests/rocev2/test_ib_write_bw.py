@@ -13,9 +13,8 @@ def test_ib_write_bw(rocev2_env):
     server_ip = rocev2_env.Server.get_ipv4()
 
     # Start server in background
-    server_proc = rocev2_env.Server.run(
-        "ib_write_bw -d rxe_server -R -x 1 > /tmp/ib_write_bw_server.log 2>&1",
-        background=True
+    server_proc = rocev2_env.Server.popen(
+        "ib_write_bw -d rxe_server -R -x 1 > /tmp/ib_write_bw_server.log 2>&1"
     )
 
     time.sleep(2)  # Wait for server to be ready
@@ -42,9 +41,8 @@ def test_ib_write_bw_ipv6(rocev2_env):
     server_ipv6 = rocev2_env.Server.get_ipv6()
 
     # Start server in background (use -g 2 for IPv6 GID index)
-    server_proc = rocev2_env.Server.run(
-        "ib_write_bw -d rxe_server -R -x 2 > /tmp/ib_write_bw_server_ipv6.log 2>&1",
-        background=True
+    server_proc = rocev2_env.Server.popen(
+        "ib_write_bw -d rxe_server -R -x 2 > /tmp/ib_write_bw_server_ipv6.log 2>&1"
     )
 
     time.sleep(2)
@@ -94,10 +92,9 @@ def test_ib_write_bw_bench_by_mtu(rocev2_env):
     for mtu_size, label in mtu_sizes:
         print(f"\n--- Testing active MTU: {label} ---")
 
-        server_proc = rocev2_env.Server.run(
+        server_proc = rocev2_env.Server.popen(
             f"ib_write_bw -d rxe_server -R -x 1 -s {msg_size} -m {mtu_size} "
-            f"> /tmp/ib_write_bw_server_mtu{label}.log 2>&1",
-            background=True
+            f"> /tmp/ib_write_bw_server_mtu{label}.log 2>&1"
         )
         time.sleep(2)
         try:
@@ -160,10 +157,9 @@ def test_ib_write_bw_bench_by_QP(rocev2_env):
     for qp_count, label in qp_values:
         print(f"\n--- Testing QP count: {label} ---")
 
-        server_proc = rocev2_env.Server.run(
+        server_proc = rocev2_env.Server.popen(
             f"ib_write_bw -d rxe_server -R -x 1 -q {qp_count} "
-            f"> /tmp/ib_write_bw_server_{label}.log 2>&1",
-            background=True
+            f"> /tmp/ib_write_bw_server_{label}.log 2>&1"
         )
         time.sleep(2)
         try:
@@ -237,10 +233,9 @@ def test_ib_write_bw_bench_netem_loss(rocev2_env):
                 f"tc qdisc add dev {client_iface} root netem loss {loss_pct}%"
             )
 
-        server_proc = rocev2_env.Server.run(
+        server_proc = rocev2_env.Server.popen(
             f"ib_write_bw -d rxe_server -R -x 1 "
-            f"> /tmp/ib_write_bw_server_loss{label}.log 2>&1",
-            background=True
+            f"> /tmp/ib_write_bw_server_loss{label}.log 2>&1"
         )
         time.sleep(2)
         try:
@@ -317,10 +312,9 @@ def test_ib_write_bw_bench_netem_loss_qp(rocev2_env):
         for qp_count, label in qp_values:
             print(f"\n--- Testing QP count: {label} @ {loss_pct}% loss ---")
 
-            server_proc = rocev2_env.Server.run(
+            server_proc = rocev2_env.Server.popen(
                 f"ib_write_bw -d rxe_server -R -x 1 -q {qp_count} "
-                f"> /tmp/ib_write_bw_server_loss{label}.log 2>&1",
-                background=True
+                f"> /tmp/ib_write_bw_server_loss{label}.log 2>&1"
             )
             time.sleep(2)
             try:

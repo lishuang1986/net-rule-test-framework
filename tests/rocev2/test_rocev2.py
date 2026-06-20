@@ -52,9 +52,8 @@ def test_rdma_basic_connect(rocev2_env):
     port = 12345
 
     # Start rdma_server in background
-    server_proc = rocev2_env.Server.run(
-        f"rdma_server -p {port} > /tmp/rdma_server.log 2>&1",
-        background=True
+    server_proc = rocev2_env.Server.popen(
+        f"rdma_server -p {port} > /tmp/rdma_server.log 2>&1"
     )
     time.sleep(2)
 

@@ -2,57 +2,23 @@
 # Copyright (c) 2026 Li Shuang
 from abc import ABC, abstractmethod
 
+from .node import Client, Router, Server
+
 
 class RouterTopo(ABC):
-    """Router topology base class - defines interfaces for nodes to implement"""
-    
-    class Client(ABC):
-        @abstractmethod
-        def get_ipv4(self) -> str:
-            pass
+    """Router topology base class"""
 
-        @abstractmethod
-        def get_ipv6(self) -> str:
-            pass
+    @property
+    @abstractmethod
+    def Client(self) -> Client:
+        ...
 
-        @abstractmethod
-        def get_iface(self) -> str:
-            pass
+    @property
+    @abstractmethod
+    def Router(self) -> Router:
+        ...
 
-    class Router(ABC):
-        @abstractmethod
-        def get_ipv4_to_client(self) -> str:
-            pass
-
-        @abstractmethod
-        def get_ipv4_to_server(self) -> str:
-            pass
-
-        @abstractmethod
-        def get_ipv6_to_client(self) -> str:
-            pass
-
-        @abstractmethod
-        def get_ipv6_to_server(self) -> str:
-            pass
-
-        @abstractmethod
-        def get_iface_to_client(self) -> str:
-            pass
-
-        @abstractmethod
-        def get_iface_to_server(self) -> str:
-            pass
-
-    class Server(ABC):
-        @abstractmethod
-        def get_ipv4(self) -> str:
-            pass
-
-        @abstractmethod
-        def get_ipv6(self) -> str:
-            pass
-
-        @abstractmethod
-        def get_iface(self) -> str:
-            pass
+    @property
+    @abstractmethod
+    def Server(self) -> Server:
+        ...

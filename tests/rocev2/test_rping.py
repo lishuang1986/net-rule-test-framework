@@ -12,15 +12,14 @@ def test_rping_ipv4(rocev2_env):
     client_if = rocev2_env.Client.get_iface()
 
     # Start tcpdump in background to capture RoCEv2 traffic (UDP port 4791)
-    tcpdump_proc = rocev2_env.Client.run(
-        f"tcpdump -U -i {client_if} udp port 4791 -w /tmp/rping_rocev2.pcap", background=True
+    tcpdump_proc = rocev2_env.Client.popen(
+        f"tcpdump -U -i {client_if} udp port 4791 -w /tmp/rping_rocev2.pcap"
     )
     time.sleep(1)
 
     # Start rping server in background (listen on all interfaces)
-    server_proc = rocev2_env.Server.run(
-        "rping -s -d rxe_server -C 3 -v -a 0.0.0.0 > /tmp/rping_server.log 2>&1",
-        background=True
+    server_proc = rocev2_env.Server.popen(
+        "rping -s -d rxe_server -C 3 -v -a 0.0.0.0 > /tmp/rping_server.log 2>&1"
     )
     time.sleep(2)
     try:

@@ -7,7 +7,7 @@ from framework.infra.netns.router import NetnsRouterInfra
 from framework.infra.vrf.client_server import VrfClientServerInfra
 from framework.infra.vrf.router import VrfRouterInfra
 from framework.infra.libvirt.client_server import LibvirtClientServerInfra
-from framework.infra.base import BaseInfra
+from framework.topo.node import Node
 
 
 def pytest_addoption(parser):
@@ -17,9 +17,9 @@ def pytest_addoption(parser):
 def pytest_configure(config):
     verbosity = config.option.verbose
     if verbosity >= 2:
-        BaseInfra.set_verbose(True)
+        Node.set_verbose(True)
     else:
-        BaseInfra.set_verbose(False)
+        Node.set_verbose(False)
 
 
 #def pytest_ignore_collect(collection_path, config):
