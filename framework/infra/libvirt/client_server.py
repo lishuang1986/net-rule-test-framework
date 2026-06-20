@@ -7,6 +7,7 @@ import time
 import uuid
 from typing import Dict
 from ...topo.client_server import ClientServerTopo
+from ...topo.node import Client, Server, Node
 from ..base import BaseInfra, LibvirtVMNode
 
 
@@ -35,34 +36,32 @@ class LibvirtClientServerInfra(ClientServerTopo, BaseInfra):
     VM_VCPUS = 2
 
     # Concrete implementation of Client node
-    class Client(ClientServerTopo.Client, LibvirtVMNode):
-        def __init__(self, executor):
-            self._name = "client"
-            LibvirtVMNode.__init__(self, executor, self._name, "Client")
+    class _ClientNode(Client, LibvirtVMNode):
+        def __init__(self, infra):
+            LibvirtVMNode.__init__(self, infra, "client", "Client")
 
         def get_ipv4(self) -> str:
-            return self._executor._logical_to_ip[self._name]
+            return self._infra._logical_to_ip[self._name]
 
         def get_ipv6(self) -> str:
-            return self._executor._logical_to_ipv6[self._name]
+            return self._infra._logical_to_ipv6[self._name]
 
         def get_iface(self) -> str:
-            return self._executor._logical_to_iface[self._name]
+            return self._infra._logical_to_iface[self._name]
 
     # Concrete implementation of Server node
-    class Server(ClientServerTopo.Server, LibvirtVMNode):
-        def __init__(self, executor):
-            self._name = "server"
-            LibvirtVMNode.__init__(self, executor, self._name, "Server")
+    class _ServerNode(Server, LibvirtVMNode):
+        def __init__(self, infra):
+            LibvirtVMNode.__init__(self, infra, "server", "Server")
 
         def get_ipv4(self) -> str:
-            return self._executor._logical_to_ip[self._name]
+            return self._infra._logical_to_ip[self._name]
 
         def get_ipv6(self) -> str:
-            return self._executor._logical_to_ipv6[self._name]
+            return self._infra._logical_to_ipv6[self._name]
 
         def get_iface(self) -> str:
-            return self._executor._logical_to_iface[self._name]
+            return self._infra._logical_to_iface[self._name]
 
     def __init__(self):
         self.prefix = str(uuid.uuid4())[:8]
@@ -74,11 +73,19 @@ class LibvirtClientServerInfra(ClientServerTopo, BaseInfra):
         self._created_vms = []
         self._libvirtd_was_active = False
 
-        # Instantiate node objects, passing self as executor
-        self.Client = self.Client(self)
-        self.Server = self.Server(self)
+        # Instantiate node objects, passing self as infra
+        self._client = self._ClientNode(self)
+        self._server = self._ServerNode(self)
 
-    def setup(self) -> Dict[str, str]:
+    @property
+    def Client(self) -> _ClientNode:
+        return self._client
+
+    @property
+    def Server(self) -> _ServerNode:
+        return self._server
+
+    def setup(self) -> None:
         # 0. Clean up any leftover VMs/disks from previous failed runs
         self._cleanup_leftovers()
 
@@ -106,9 +113,7 @@ class LibvirtClientServerInfra(ClientServerTopo, BaseInfra):
         # 7. Health check
         self._health_check()
 
-        return self._logical_to_ip.copy()
-
-    def cleanup(self):
+    def cleanup(self) -> None:
         # Stop and undefine VMs
         for vm_name in self._created_vms:
             subprocess.run(f"virsh shutdown {vm_name}", shell=True, stderr=subprocess.DEVNULL)
@@ -127,7 +132,7 @@ class LibvirtClientServerInfra(ClientServerTopo, BaseInfra):
 
         # Restore libvirtd to its original state
         if not self._libvirtd_was_active:
-            if BaseInfra.verbose:
+            if Node.verbose:
                 print("[INFO] Stopping libvirtd (restoring original state)")
             subprocess.run("systemctl stop libvirtd", shell=True, stderr=subprocess.DEVNULL)
 
@@ -152,7 +157,7 @@ class LibvirtClientServerInfra(ClientServerTopo, BaseInfra):
 
     def _cleanup_leftovers(self):
         """Clean up any leftover VMs and disks from previous failed runs"""
-        if BaseInfra.verbose:
+        if Node.verbose:
             print("[INFO] Cleaning up leftovers from previous runs")
 
         # Clean up VMs that might exist from previous runs
@@ -162,7 +167,7 @@ class LibvirtClientServerInfra(ClientServerTopo, BaseInfra):
         # Clean up disk images
         for disk_path in self.VM_DISKS.values():
             if os.path.exists(disk_path):
-                if BaseInfra.verbose:
+                if Node.verbose:
                     print(f"[INFO] Removing leftover disk: {disk_path}")
                 subprocess.run(f"rm -f {disk_path}", shell=True, stderr=subprocess.DEVNULL)
 
@@ -174,7 +179,7 @@ class LibvirtClientServerInfra(ClientServerTopo, BaseInfra):
 
         # Start libvirtd if not running
         if not self._libvirtd_was_active:
-            if BaseInfra.verbose:
+            if Node.verbose:
                 print("[INFO] libvirtd is not running, starting it now")
             subprocess.run("systemctl start libvirtd", shell=True, check=True)
             # Wait for libvirtd to be ready
@@ -207,11 +212,11 @@ class LibvirtClientServerInfra(ClientServerTopo, BaseInfra):
 
         # Skip if already customized
         if os.path.exists(marker_file):
-            if BaseInfra.verbose:
+            if Node.verbose:
                 print(f"[INFO] Base image already customized, skipping")
             return
 
-        if BaseInfra.verbose:
+        if Node.verbose:
             print(f"[INFO] Customizing base image: {self.BASE_IMAGE}")
 
         # Expand base image to make room for package installation
@@ -234,7 +239,7 @@ class LibvirtClientServerInfra(ClientServerTopo, BaseInfra):
                         break
             if not root_part:
                 raise RuntimeError("Cannot detect root partition from base image")
-            if BaseInfra.verbose:
+            if Node.verbose:
                 print(f"[INFO] Expanding base image to {disk_size} with virt-resize")
             tmp_img = self.BASE_IMAGE + ".expanded"
             subprocess.run(
@@ -280,7 +285,7 @@ class LibvirtClientServerInfra(ClientServerTopo, BaseInfra):
         with open(marker_file, 'w') as f:
             f.write('customized')
 
-        if BaseInfra.verbose:
+        if Node.verbose:
             print(f"[INFO] Base image customized successfully")
 
     def _create_vm_disks(self):
@@ -366,7 +371,7 @@ class LibvirtClientServerInfra(ClientServerTopo, BaseInfra):
                     ssh_ready = True
                     break
                 last_result = result
-                if BaseInfra.verbose:
+                if Node.verbose:
                     print(f"[INFO] SSH not ready yet for {vm_name} ({ip}), retrying... stderr: {result.stderr.strip()}")
                 time.sleep(2)
 
@@ -387,7 +392,7 @@ class LibvirtClientServerInfra(ClientServerTopo, BaseInfra):
                         parts = line.split()
                         iface_name = parts[1].rstrip(':')
                         self._logical_to_iface[node] = iface_name
-                        if BaseInfra.verbose:
+                        if Node.verbose:
                             print(f"[INFO] {vm_name} interface inside VM: {iface_name}")
                         break
                 if node not in self._logical_to_iface:
@@ -398,16 +403,16 @@ class LibvirtClientServerInfra(ClientServerTopo, BaseInfra):
     def _health_check(self):
         """Basic connectivity check (IPv4 + IPv6)"""
         # Wait for IPv6 DAD to complete
-        self.Client._wait_for_ipv6_dad()
-        self.Server._wait_for_ipv6_dad()
+        self._client._wait_for_ipv6_dad()
+        self._server._wait_for_ipv6_dad()
 
         # Check IPv4 connectivity
-        server_ipv4 = self.Server.get_ipv4()
-        self.Client.run(f"ping -c 1 -W 1 {server_ipv4}")
+        server_ipv4 = self._server.get_ipv4()
+        self._client.run(f"ping -c 1 -W 1 {server_ipv4}")
 
         # Check IPv6 connectivity
-        server_ipv6 = self.Server.get_ipv6()
-        self.Client.run(f"ping -6 -c 3 -W 3 {server_ipv6}")
+        server_ipv6 = self._server.get_ipv6()
+        self._client.run(f"ping -6 -c 3 -W 3 {server_ipv6}")
 
     def _setup_ipv6(self):
         """Setup temporary IPv6 addresses on VMs (lost after reboot)"""
@@ -419,7 +424,7 @@ class LibvirtClientServerInfra(ClientServerTopo, BaseInfra):
             node = getattr(self, node_name.capitalize())
             iface = node.get_iface()
             ipv6_with_prefix = ipv6_addrs[node_name]
-            if BaseInfra.verbose:
+            if Node.verbose:
                 print(f"[INFO] Adding IPv6 address {ipv6_with_prefix} on {vm_name} (iface={iface})")
             node.run(f"ip -6 addr add {ipv6_with_prefix} dev {iface}")
             # Store IPv6 address without prefix

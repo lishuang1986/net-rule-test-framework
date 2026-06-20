@@ -29,16 +29,14 @@ def test_ibv_pingpong_ipv4(rocev2_env, transport, log_suffix):
     port = "18515"
 
     # Start tcpdump in background to capture RoCEv2 traffic (UDP port 4791)
-    tcpdump_proc = rocev2_env.Client.run(
-        f"tcpdump -U -i {client_iface} tcp port {port} or udp port 4791 -w {pcap_file}",
-        background=True
+    tcpdump_proc = rocev2_env.Client.popen(
+        f"tcpdump -U -i {client_iface} tcp port {port} or udp port 4791 -w {pcap_file}"
     )
     time.sleep(1)
 
     # Start server in background, redirect output to file
-    server_proc = rocev2_env.Server.run(
-        f"{binary} -d rxe_server -g 1 -n 3 -p {port} > /tmp/pingpong{log_suffix}_server.log 2>&1",
-        background=True
+    server_proc = rocev2_env.Server.popen(
+        f"{binary} -d rxe_server -g 1 -n 3 -p {port} > /tmp/pingpong{log_suffix}_server.log 2>&1"
     )
     time.sleep(2)
     try:
@@ -75,9 +73,8 @@ def test_ibv_rc_pingpong_ipv6(rocev2_env):
     server_ipv6 = rocev2_env.Server.get_ipv6()
 
     # Use -g 2 for IPv6 GID index (GID[2]=2001:db8:1::x)
-    server_proc = rocev2_env.Server.run(
-        "ibv_rc_pingpong -d rxe_server -g 2 -n 3 > /tmp/pingpong_server_ipv6.log 2>&1",
-        background=True
+    server_proc = rocev2_env.Server.popen(
+        "ibv_rc_pingpong -d rxe_server -g 2 -n 3 > /tmp/pingpong_server_ipv6.log 2>&1"
     )
     time.sleep(2)
     try:
@@ -121,10 +118,9 @@ def test_ibv_rc_pingpong_bench_by_size(rocev2_env):
     for msg_size, label in sizes:
         print(f"\n--- Testing Message Size: {label} ---")
 
-        server_proc = rocev2_env.Server.run(
+        server_proc = rocev2_env.Server.popen(
             f"ibv_rc_pingpong -d rxe_server -g 1 -n {iterations} -s {msg_size} "
-            f"> /tmp/pingpong_server_{label}.log 2>&1",
-            background=True
+            f"> /tmp/pingpong_server_{label}.log 2>&1"
         )
         time.sleep(2)
         try:
@@ -212,11 +208,10 @@ def test_ibv_rc_pingpong_perf_stat(rocev2_env):
     for msg_size, suffix, label in sizes:
         print(f"\n--- Testing Message Size: {label} ---")
 
-        server_proc = rocev2_env.Server.run(
+        server_proc = rocev2_env.Server.popen(
             f"perf stat -e {perf_events} -o /tmp/perf_stat_server_{suffix}.txt -- "
             f"ibv_rc_pingpong -d rxe_server -g 1 -n {iterations} -s {msg_size} "
-            f"> /tmp/pingpong_server_{suffix}.log 2>&1",
-            background=True
+            f"> /tmp/pingpong_server_{suffix}.log 2>&1"
         )
         time.sleep(2)
         try:
@@ -310,11 +305,10 @@ def test_ibv_rc_pingpong_perf_record(rocev2_env):
     for msg_size, suffix, label in sizes:
         print(f"\n--- Testing Message Size: {label} ---")
 
-        server_proc = rocev2_env.Server.run(
+        server_proc = rocev2_env.Server.popen(
             f"perf record -F 4000 -g -o /tmp/perf_data_server_{suffix}.data "
             f"ibv_rc_pingpong -d rxe_server -g 1 -n {iterations} -s {msg_size} "
-            f"> /tmp/pingpong_server_{suffix}.log 2>&1",
-            background=True
+            f"> /tmp/pingpong_server_{suffix}.log 2>&1"
         )
         time.sleep(2)
         try:

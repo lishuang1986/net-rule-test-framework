@@ -4,17 +4,16 @@ import subprocess
 import uuid
 from typing import Dict
 from ...topo.client_server import ClientServerTopo
+from ...topo.node import Client, Server
 from ..base import BaseInfra, NetnsNode
 
 
 class NetnsClientServerInfra(ClientServerTopo, BaseInfra):
     """Netns-based Client-Server topology"""
 
-    # Concrete implementation of Client node
-    class Client(ClientServerTopo.Client, NetnsNode):
-        def __init__(self, executor):
-            self._name = "client"
-            NetnsNode.__init__(self, executor, self._name, "Client")
+    class _ClientNode(Client, NetnsNode):
+        def __init__(self, infra):
+            NetnsNode.__init__(self, infra, "client", "Client")
 
         def get_ipv4(self) -> str:
             return "192.168.100.2"
@@ -25,11 +24,9 @@ class NetnsClientServerInfra(ClientServerTopo, BaseInfra):
         def get_iface(self) -> str:
             return "eth0"
 
-    # Concrete implementation of Server node
-    class Server(ClientServerTopo.Server, NetnsNode):
-        def __init__(self, executor):
-            self._name = "server"
-            NetnsNode.__init__(self, executor, self._name, "Server")
+    class _ServerNode(Server, NetnsNode):
+        def __init__(self, infra):
+            NetnsNode.__init__(self, infra, "server", "Server")
 
         def get_ipv4(self) -> str:
             return "192.168.100.1"
@@ -45,19 +42,26 @@ class NetnsClientServerInfra(ClientServerTopo, BaseInfra):
         self._logical_to_physical: Dict[str, str] = {}
         self.veths = []
 
-        # Instantiate node objects, passing self as executor
-        self.Client = self.Client(self)
-        self.Server = self.Server(self)
+        self._client = self._ClientNode(self)
+        self._server = self._ServerNode(self)
 
-    def setup(self) -> Dict[str, str]:
+    @property
+    def Client(self) -> _ClientNode:
+        return self._client
+
+    @property
+    def Server(self) -> _ServerNode:
+        return self._server
+
+    def setup(self) -> None:
         client_name = "client"
         server_name = "server"
-        client_ipv4 = self.Client.get_ipv4()
-        client_ipv6 = self.Client.get_ipv6()
-        server_ipv4 = self.Server.get_ipv4()
-        server_ipv6 = self.Server.get_ipv6()
-        client_iface = self.Client.get_iface()
-        server_iface = self.Server.get_iface()
+        client_ipv4 = self._client.get_ipv4()
+        client_ipv6 = self._client.get_ipv6()
+        server_ipv4 = self._server.get_ipv4()
+        server_ipv6 = self._server.get_ipv6()
+        client_iface = self._client.get_iface()
+        server_iface = self._server.get_iface()
 
         for logical_node in [client_name, server_name]:
             physical_name = f"{self.prefix}_{logical_node}"
@@ -80,9 +84,8 @@ class NetnsClientServerInfra(ClientServerTopo, BaseInfra):
         subprocess.run(f"ip netns exec {server_ns} ip link set lo up", shell=True, check=True)
 
         self._health_check()
-        return self._logical_to_physical.copy()
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         for veth, peer in self.veths:
             subprocess.run(f"ip link del {veth}", shell=True, stderr=subprocess.DEVNULL)
         for physical_ns in self._logical_to_physical.values():
@@ -99,7 +102,7 @@ class NetnsClientServerInfra(ClientServerTopo, BaseInfra):
         self.veths.append((iface_a, iface_b))
 
     def _health_check(self):
-        self.Client._wait_for_ipv6_dad()
-        self.Server._wait_for_ipv6_dad()
-        self.Client.run(f"ping -c 1 -W 1 {self.Server.get_ipv4()}")
-        self.Client.run(f"ping -c 1 -W 1 {self.Server.get_ipv6()}")
+        self._client._wait_for_ipv6_dad()
+        self._server._wait_for_ipv6_dad()
+        self._client.run(f"ping -c 1 -W 1 {self._server.get_ipv4()}")
+        self._client.run(f"ping -c 1 -W 1 {self._server.get_ipv6()}")

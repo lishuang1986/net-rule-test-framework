@@ -2,92 +2,48 @@
 # Copyright (c) 2026 Li Shuang
 from abc import ABC, abstractmethod
 import subprocess
-import time
-from typing import Dict
 from ..topo.node import Node
 
 
 class BaseInfra(ABC):
-    
-    verbose = False
-    
-    @classmethod
-    def set_verbose(cls, enabled: bool):
-        cls.verbose = enabled
-    
+
     @abstractmethod
-    def setup(self) -> Dict[str, str]:
-        pass
-    
-    @abstractmethod
-    def cleanup(self):
+    def setup(self) -> None:
         pass
 
-    def _execute(self, cmd: str, tag: str = "", silent: bool = False):
-        if self.__class__.verbose:
-            if tag:
-                print(f"[{tag}] $ {cmd}")
-            else:
-                print(f"$ {cmd}")
-
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, errors='replace')
-
-        if self.__class__.verbose and not silent:
-            if result.stdout:
-                print(f"[STDOUT]\n{result.stdout.rstrip()}")
-            if result.stderr:
-                print(f"[STDERR] {result.stderr.rstrip()}")
-            if result.returncode != 0:
-                print(f"[RETURN] {result.returncode}")
-            print("-" * 40)
-
-        return result
-    
-    def _check_result(self, result, cmd: str, check: bool = True, expect: str = "passed"):
-        """Unified result check logic"""
-        # check=False means skip all returncode checks
-        if not check:
-            return result
-
-        if expect == "failed":
-            if result.returncode == 0:
-                raise AssertionError(f"Expected failure, but command succeeded.\nCommand: {cmd}")
-        elif expect == "passed":
-            if result.returncode != 0:
-                raise AssertionError(
-                    f"Command failed with exit code {result.returncode}\n"
-                    f"Command: {cmd}\n{result.stderr}"
-                )
-        else:
-            # TODO: Determine behavior for other expect values
-            # For now, skip returncode check for unknown expect values
-            pass
-        return result
+    @abstractmethod
+    def cleanup(self) -> None:
+        pass
 
 
 class NetnsNode(Node):
     """Base class for netns nodes, provides common run() implementation"""
-    def __init__(self, executor, name: str, tag: str):
-        self._executor = executor
+    def __init__(self, infra, name: str, tag: str):
+        self._infra = infra
         self._name = name
         self._tag = tag
 
-    def run(self, cmd: str, check: bool = True, expect: str = "passed", background: bool = False, silent: bool = False):
-        physical_ns = self._executor._logical_to_physical[self._name]
+    def run(
+        self, cmd: str, check: bool = True, expect: str = "passed", silent: bool = False
+    ) -> subprocess.CompletedProcess[str]:
+        physical_ns = self._infra._logical_to_physical[self._name]
         full_cmd = f"ip netns exec {physical_ns} {cmd}"
+        result = self._execute(full_cmd, tag=self._tag, silent=silent)
+        return self._check_result(result, cmd, check, expect)
 
-        if background:
-            if self._executor.verbose:
-                print(f"[{self._tag}] $ {full_cmd} &")
-            return subprocess.Popen(
-                full_cmd, shell=True,
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE
-            )
-        else:
-            result = self._executor._execute(full_cmd, tag=self._tag, silent=silent)
-            return self._executor._check_result(result, cmd, check, expect)
+    def popen(self, cmd: str) -> subprocess.Popen[str]:
+        physical_ns = self._infra._logical_to_physical[self._name]
+        full_cmd = f"ip netns exec {physical_ns} {cmd}"
+        if self.__class__.verbose:
+            print(f"[{self._tag}] $ {full_cmd} &")
+        return subprocess.Popen(
+            full_cmd, shell=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
 
-    def get(self, src: str, dst: str, check: bool = True, silent: bool = False):
+    def get(
+        self, src: str, dst: str
+    ) -> subprocess.CompletedProcess[str]:
         """Copy a file from the host to this netns node via cp.
 
         NetnsNode shares the host filesystem, so cp works directly.
@@ -95,52 +51,40 @@ class NetnsNode(Node):
         Args:
             src: Source path on the host
             dst: Destination path on this node
-            check: Whether to assert command success
-            silent: Suppress output
         """
         cmd = f"cp {src} {dst}"
-        result = self._executor._execute(cmd, tag=self._tag, silent=silent)
-        return self._executor._check_result(result, cmd, check)
-
-    def _wait_for_ipv6_dad(self, timeout: float = 3.0) -> bool:
-        """Wait for IPv6 DAD to complete inside this node's netns."""
-        physical_ns = self._executor._logical_to_physical[self._name]
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            ret = subprocess.run(
-                f"ip netns exec {physical_ns} ip -6 addr show tentative 2>/dev/null | grep -c tentative",
-                shell=True, capture_output=True, text=True)
-            count = ret.stdout.strip()
-            if count == "" or int(count) == 0:
-                return True
-            time.sleep(0.2)
-        return False
-
+        result = self._execute(cmd, tag=self._tag)
+        return self._check_result(result, cmd)
 
 class VrfNode(Node):
     """Base class for VRF nodes, executes commands via ip vrf exec"""
-    def __init__(self, executor, name: str, tag: str):
-        self._executor = executor
+    def __init__(self, infra, name: str, tag: str):
+        self._infra = infra
         self._name = name
         self._tag = tag
 
-    def run(self, cmd: str, check: bool = True, expect: str = "passed", background: bool = False, silent: bool = False):
-        # Get VRF name (assuming executor has _logical_to_physical mapping)
-        vrf_name = self._executor._logical_to_physical[self._name]
+    def run(
+        self, cmd: str, check: bool = True, expect: str = "passed", silent: bool = False
+    ) -> subprocess.CompletedProcess[str]:
+        # Get VRF name (assuming infra has _logical_to_physical mapping)
+        vrf_name = self._infra._logical_to_physical[self._name]
         full_cmd = f"ip vrf exec {vrf_name} {cmd}"
+        result = self._execute(full_cmd, tag=self._tag, silent=silent)
+        return self._check_result(result, cmd, check, expect)
 
-        if background:
-            if self._executor.verbose:
-                print(f"[{self._tag}] $ {full_cmd} &")
-            return subprocess.Popen(
-                full_cmd, shell=True,
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE
-            )
-        else:
-            result = self._executor._execute(full_cmd, tag=self._tag, silent=silent)
-            return self._executor._check_result(result, cmd, check, expect)
+    def popen(self, cmd: str) -> subprocess.Popen[str]:
+        vrf_name = self._infra._logical_to_physical[self._name]
+        full_cmd = f"ip vrf exec {vrf_name} {cmd}"
+        if self.__class__.verbose:
+            print(f"[{self._tag}] $ {full_cmd} &")
+        return subprocess.Popen(
+            full_cmd, shell=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
 
-    def get(self, src: str, dst: str, check: bool = True, silent: bool = False):
+    def get(
+        self, src: str, dst: str
+    ) -> subprocess.CompletedProcess[str]:
         """Copy a file from the host to this VRF node via cp.
 
         VrfNode shares the host filesystem, so cp works directly.
@@ -148,73 +92,44 @@ class VrfNode(Node):
         Args:
             src: Source path on the host
             dst: Destination path on this node
-            check: Whether to assert command success
-            silent: Suppress output
         """
         cmd = f"cp {src} {dst}"
-        result = self._executor._execute(cmd, tag=self._tag, silent=silent)
-        return self._executor._check_result(result, cmd, check)
-
-    def _wait_for_ipv6_dad(self, timeout: float = 3.0) -> bool:
-        """Wait for IPv6 DAD to complete (VRF interfaces are on host)."""
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            ret = subprocess.run(
-                "ip -6 addr show tentative 2>/dev/null | grep -c tentative",
-                shell=True, capture_output=True, text=True)
-            count = ret.stdout.strip()
-            if count == "" or int(count) == 0:
-                return True
-            time.sleep(0.2)
-        return False
-
+        result = self._execute(cmd, tag=self._tag)
+        return self._check_result(result, cmd)
 
 class HostNode(Node):
     """Base class for local host nodes, executes commands directly (no netns)"""
-    def __init__(self, executor, name: str, tag: str):
-        self._executor = executor
+    def __init__(self, infra, name: str, tag: str):
+        self._infra = infra
         self._name = name
         self._tag = tag
 
-    def run(self, cmd: str, check: bool = True, expect: str = "passed", background: bool = False, silent: bool = False):
-        # Execute directly, no prefix added
-        if background:
-            if self._executor.verbose:
-                print(f"[{self._tag}] $ {cmd} &")
-            return subprocess.Popen(
-                cmd, shell=True,
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE
-            )
-        else:
-            result = self._executor._execute(cmd, tag=self._tag, silent=silent)
-            return self._executor._check_result(result, cmd, check, expect)
+    def run(
+        self, cmd: str, check: bool = True, expect: str = "passed", silent: bool = False
+    ) -> subprocess.CompletedProcess[str]:
+        result = self._execute(cmd, tag=self._tag, silent=silent)
+        return self._check_result(result, cmd, check, expect)
 
-    def get(self, src: str, dst: str, check: bool = True, silent: bool = False):
+    def popen(self, cmd: str) -> subprocess.Popen[str]:
+        if self.__class__.verbose:
+            print(f"[{self._tag}] $ {cmd} &")
+        return subprocess.Popen(
+            cmd, shell=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+
+    def get(
+        self, src: str, dst: str
+    ) -> subprocess.CompletedProcess[str]:
         """Copy a file on the host (cp wrapper).
 
         Args:
             src: Source path
             dst: Destination path
-            check: Whether to assert command success
-            silent: Suppress output
         """
         cmd = f"cp {src} {dst}"
-        result = self._executor._execute(cmd, tag=self._tag, silent=silent)
-        return self._executor._check_result(result, cmd, check)
-
-    def _wait_for_ipv6_dad(self, timeout: float = 3.0) -> bool:
-        """Wait for IPv6 DAD to complete on the host."""
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            ret = subprocess.run(
-                "ip -6 addr show tentative 2>/dev/null | grep -c tentative",
-                shell=True, capture_output=True, text=True)
-            count = ret.stdout.strip()
-            if count == "" or int(count) == 0:
-                return True
-            time.sleep(0.2)
-        return False
-
+        result = self._execute(cmd, tag=self._tag)
+        return self._check_result(result, cmd)
 
 class LibvirtVMNode(Node):
     """Node that executes commands via SSH on a libvirt VM.
@@ -225,59 +140,50 @@ class LibvirtVMNode(Node):
     - sshpass installed on host for SSH automation
     """
 
-    def __init__(self, executor, name: str, tag: str):
-        self._executor = executor
+    def __init__(self, infra, name: str, tag: str):
+        self._infra = infra
         self._name = name
         self._tag = tag
 
-    def run(self, cmd: str, check: bool = True, expect: str = "passed", background: bool = False, silent: bool = False):
-        ip = self._executor._logical_to_ip[self._name]
-        ssh_user = self._executor.ssh_user
-        ssh_password = self._executor.ssh_password
+    def run(
+        self, cmd: str, check: bool = True, expect: str = "passed", silent: bool = False
+    ) -> subprocess.CompletedProcess[str]:
+        ip = self._infra._logical_to_ip[self._name]
+        ssh_user = self._infra.ssh_user
+        ssh_password = self._infra.ssh_password
         full_cmd = f"sshpass -p '{ssh_password}' ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null {ssh_user}@{ip} '{cmd}'"
+        result = self._execute(full_cmd, tag=self._tag, silent=silent)
+        return self._check_result(result, cmd, check, expect)
 
-        if background:
-            if self._executor.verbose:
-                print(f"[{self._tag}] $ {full_cmd} &")
-            return subprocess.Popen(
-                full_cmd, shell=True,
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE
-            )
-        else:
-            result = self._executor._execute(full_cmd, tag=self._tag, silent=silent)
-            return self._executor._check_result(result, cmd, check, expect)
+    def popen(self, cmd: str) -> subprocess.Popen[str]:
+        ip = self._infra._logical_to_ip[self._name]
+        ssh_user = self._infra.ssh_user
+        ssh_password = self._infra.ssh_password
+        full_cmd = f"sshpass -p '{ssh_password}' ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null {ssh_user}@{ip} '{cmd}'"
+        if self.__class__.verbose:
+            print(f"[{self._tag}] $ {full_cmd} &")
+        return subprocess.Popen(
+            full_cmd, shell=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
 
-    def get(self, src: str, dst: str, check: bool = True, silent: bool = False):
+    def get(
+        self, src: str, dst: str
+    ) -> subprocess.CompletedProcess[str]:
         """Copy a file from the host to this VM via scp.
 
         Args:
             src: Source path on the host
             dst: Destination path on this VM
-            check: Whether to assert command success
-            silent: Suppress output
         """
-        ip = self._executor._logical_to_ip[self._name]
-        ssh_user = self._executor.ssh_user
-        ssh_password = self._executor.ssh_password
+        ip = self._infra._logical_to_ip[self._name]
+        ssh_user = self._infra.ssh_user
+        ssh_password = self._infra.ssh_password
         cmd = (
             f"sshpass -p '{ssh_password}' "
             f"scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "
             f"{src} {ssh_user}@{ip}:{dst}"
         )
-        result = self._executor._execute(cmd, tag=self._tag, silent=silent)
-        return self._executor._check_result(result, cmd, check)
+        result = self._execute(cmd, tag=self._tag)
+        return self._check_result(result, cmd)
 
-    def _wait_for_ipv6_dad(self, timeout: float = 3.0) -> bool:
-        """Wait for IPv6 DAD to complete inside this VM."""
-        ip = self._executor._logical_to_ip[self._name]
-        ssh_user = self._executor.ssh_user
-        ssh_password = self._executor.ssh_password
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            check_cmd = f"sshpass -p '{ssh_password}' ssh -o StrictHostKeyChecking=no {ssh_user}@{ip} 'ip -6 addr show tentative 2>/dev/null | grep -c tentative'"
-            ret = subprocess.run(check_cmd, shell=True, capture_output=True, text=True)
-            count = ret.stdout.strip()
-            if count == "" or int(count) == 0:
-                return True
-            time.sleep(0.2)
-        return False

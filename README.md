@@ -1,7 +1,6 @@
 # Net-Rule Test Framework
 
 [![Core CI](https://github.com/lishuang1986/net-rule-test-framework/actions/workflows/CI-core.yaml/badge.svg)](https://github.com/lishuang1986/net-rule-test-framework/actions/workflows/CI-core.yaml)
-[![Netns CI](https://github.com/lishuang1986/net-rule-test-framework/actions/workflows/CI-netns.yaml/badge.svg)](https://github.com/lishuang1986/net-rule-test-framework/actions/workflows/CI-netns.yaml)
 [![TC CI](https://github.com/lishuang1986/net-rule-test-framework/actions/workflows/CI-TC.yaml/badge.svg)](https://github.com/lishuang1986/net-rule-test-framework/actions/workflows/CI-TC.yaml)
 [![FW CI](https://github.com/lishuang1986/net-rule-test-framework/actions/workflows/CI-FW.yaml/badge.svg)](https://github.com/lishuang1986/net-rule-test-framework/actions/workflows/CI-FW.yaml)
 
@@ -212,14 +211,14 @@ See `framework/infra/netns/` for an example netns implementation.
 
 ```
                       Node (ABC)
-                     run() / get()
+               run() / popen() / get()
           ┌───────────┼────────┼────────────┐
           │           │        │            │
           ▼           ▼        ▼            ▼
         NetnsNode  VrfNode  HostNode  LibvirtVMNode
 
 
-ClientServerTopo (ABC)                BaseInfra (ABC)
+       ClientServerTopo (ABC)          BaseInfra (ABC)
   Client (Node)     Server (Node)    setup() / cleanup()
          │                │                  │
          └────────────────┼──────────────────┘
@@ -230,7 +229,7 @@ ClientServerTopo (ABC)                BaseInfra (ABC)
        ServerInfra   ServerInfra  ServerInfra
 
 
-RouterTopo (ABC)                                  (same BaseInfra)
+                RouterTopo (ABC)                   (same BaseInfra)
   Client (Node)   Router (Node)     Server (Node)
        │               │                  │                │
        └───────────────┼──────────────────┼────────────────┘

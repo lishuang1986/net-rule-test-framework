@@ -34,16 +34,14 @@ def _run_test(rocev2_env, mode, server_assert):
     pcap_file = f"/tmp/{log_suffix}.pcap"
 
     # Start tcpdump in background to capture RoCEv2 traffic (UDP port 4791)
-    tcpdump_proc = rocev2_env.Client.run(
-        f"tcpdump -U -i {client_iface} tcp port 7474 or udp port 4791 -w {pcap_file}",
-        background=True
+    tcpdump_proc = rocev2_env.Client.popen(
+        f"tcpdump -U -i {client_iface} tcp port 7474 or udp port 4791 -w {pcap_file}"
     )
     time.sleep(1)
 
     # Start server with specific mode in background
-    server_proc = rocev2_env.Server.run(
-        f"{BIN_SERVER} --mode {mode} > {server_log} 2>&1",
-        background=True
+    server_proc = rocev2_env.Server.popen(
+        f"{BIN_SERVER} --mode {mode} > {server_log} 2>&1"
     )
     time.sleep(2)
 
@@ -88,10 +86,9 @@ def _run_test_with_trace_event(rocev2_env, mode, server_assert):
     trace_report = f"/tmp/{log_suffix}_trace_report.log"
 
     # Start server under trace-cmd recording
-    server_proc = rocev2_env.Server.run(
+    server_proc = rocev2_env.Server.popen(
         f"trace-cmd record -o {trace_dat} -e rdma_cma:* -e rdma_core:* "
-        f"{BIN_SERVER} --mode {mode} > {server_log}",
-        background=True
+        f"{BIN_SERVER} --mode {mode} > {server_log}"
     )
     time.sleep(2)
 
@@ -132,10 +129,9 @@ def _run_test_with_trace_func(rocev2_env, mode, server_assert):
     trace_report = f"/tmp/{log_suffix}_functrace_report.log"
 
     # Start server under trace-cmd function_graph recording
-    server_proc = rocev2_env.Server.run(
+    server_proc = rocev2_env.Server.popen(
         f"trace-cmd record -p function -l 'rxe_*' -l 'ib_*' -l 'rdma_*' -l 'cm_*' -o {trace_dat} "
-        f"{BIN_SERVER} --mode {mode} > {server_log}",
-        background=True
+        f"{BIN_SERVER} --mode {mode} > {server_log}"
     )
     time.sleep(2)
 
@@ -228,9 +224,8 @@ def _run_test_with_latency(rocev2_env, mode, server_assert):
     client_log = f"/tmp/{log_suffix}_client.log"
 
     # Start server in background
-    server_proc = rocev2_env.Server.run(
-        f"{BIN_SERVER} --mode {mode} > {server_log} 2>&1",
-        background=True
+    server_proc = rocev2_env.Server.popen(
+        f"{BIN_SERVER} --mode {mode} > {server_log} 2>&1"
     )
     time.sleep(2)
 
@@ -290,10 +285,9 @@ def _run_perf_stat(rocev2_env, mode, server_assert):
     client_perf = f"/tmp/{log_suffix}_client.perf"
 
     # Start server with perf stat
-    server_proc = rocev2_env.Server.run(
+    server_proc = rocev2_env.Server.popen(
         f"perf stat -e cpu-migrations,task-clock,cycles,instructions,bus-cycles "
-        f"{BIN_SERVER} --mode {mode} > {server_log} 2> {server_perf}",
-        background=True
+        f"{BIN_SERVER} --mode {mode} > {server_log} 2> {server_perf}"
     )
     time.sleep(2)
 
@@ -390,10 +384,9 @@ def _run_perf_record(rocev2_env, mode, server_assert):
     client_perf_data = f"/tmp/perf_data_{log_suffix}_client.data"
 
     # Start server with perf record
-    server_proc = rocev2_env.Server.run(
+    server_proc = rocev2_env.Server.popen(
         f"perf record -F 4000 -g -o {server_perf_data} "
-        f"{BIN_SERVER} --mode {mode} > {server_log} 2>&1",
-        background=True
+        f"{BIN_SERVER} --mode {mode} > {server_log} 2>&1"
     )
     time.sleep(2)
 
