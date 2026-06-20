@@ -5,8 +5,7 @@ import time
 import plotext
 from tests.rocev2.utils import (
     parse_pingpong_output,
-    parse_perf_stat,
-    parse_perf_stat_text,
+    parse_perf_stat_output,
     calculate_derived_metrics,
     parse_perf_report,
     print_hotspot_report,
@@ -226,8 +225,8 @@ def test_ibv_rc_pingpong_perf_stat(rocev2_env):
 
         server_data = parse_pingpong_output(rocev2_env.Server, f"/tmp/pingpong_server_{suffix}.log")
         client_data = parse_pingpong_output(rocev2_env.Client, f"/tmp/pingpong_client_{suffix}.log")
-        server_metrics = parse_perf_stat(rocev2_env.Server, f"/tmp/perf_stat_server_{suffix}.txt")
-        client_metrics = parse_perf_stat(rocev2_env.Client, f"/tmp/perf_stat_client_{suffix}.txt")
+        server_metrics = parse_perf_stat_output(rocev2_env.Server, f"/tmp/perf_stat_server_{suffix}.txt")
+        client_metrics = parse_perf_stat_output(rocev2_env.Client, f"/tmp/perf_stat_client_{suffix}.txt")
 
         labels.append(label)
         server_raw_list.append(server_metrics)

@@ -3,7 +3,7 @@
 import os
 import pytest
 import time
-from tests.rocev2.utils import parse_perf_stat_text, parse_perf_report, print_hotspot_report
+from tests.rocev2.utils import parse_perf_stat_output, parse_perf_report, print_hotspot_report
 
 pytestmark = [pytest.mark.rocev2]
 
@@ -309,12 +309,9 @@ def _run_perf_stat(rocev2_env, mode, server_assert):
     assert "Data sent successfully" in client_result.stdout, \
         f"Client ({mode}) did not report send success"
 
-    server_perf_text = rocev2_env.Server.run(f"cat {server_perf}", check=False).stdout
-    client_perf_text = rocev2_env.Client.run(f"cat {client_perf}", check=False).stdout
-
     return {
-        "server": parse_perf_stat_text(server_perf_text),
-        "client": parse_perf_stat_text(client_perf_text),
+        "server": parse_perf_stat_output(rocev2_env.Server, server_perf),
+        "client": parse_perf_stat_output(rocev2_env.Client, client_perf),
     }
 
 

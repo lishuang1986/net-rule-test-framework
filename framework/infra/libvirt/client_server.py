@@ -264,7 +264,7 @@ class LibvirtClientServerInfra(ClientServerTopo, BaseInfra):
             f"--run-command 'dnf debuginfo-install -y libibverbs-utils libibverbs rdma-core' "
             f"--run-command 'dnf install -y libibverbs-utils librdmacm-utils rdma-core' "
             f"--run-command 'dnf install -y rdma-core-devel gcc' "
-            f"--run-command 'dnf install -y iproute iproute-tc iptables nftables'"
+            f"--run-command 'dnf install -y iproute iproute-tc iptables nftables iperf3'"
         )
         #proc = subprocess.Popen(cmd, shell=True,
         #                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,

@@ -3,7 +3,7 @@
 import re
 
 
-def parse_pingpong_output(host, log_file):
+def parse_pingpong_output(host, log_file) -> dict:
     """Parse ibv_pingpong output and extract all metrics.
 
     Calls ``host.run(f"cat {log_file}")`` once and parses all available
@@ -53,7 +53,7 @@ def parse_pingpong_output(host, log_file):
     return data
 
 
-def parse_ib_write_bw_output(host, log_file):
+def parse_ib_write_bw_output(host, log_file) -> dict:
     """Parse ib_write_bw client output and extract bandwidth metrics.
 
     Calls ``host.run(f"cat {log_file}")`` once and parses the data line
@@ -97,7 +97,59 @@ def parse_ib_write_bw_output(host, log_file):
     return data
 
 
-def parse_perf_stat_text(text):
+def parse_iperf3_output(host, log_file) -> dict:
+    """Parse iperf3 client output and extract bandwidth metrics.
+
+    Calls ``host.run(f"cat {log_file}")`` once and parses the receiver/sender
+    summary lines. Converts Mbits/sec to MB/sec (÷8) to match the convention
+    used by other parse functions in this module.
+
+    Args:
+        host: The VM/host object to run commands on
+        log_file: Path to the iperf3 client output log file
+
+    Returns:
+        Dict with keys:
+
+        - **bw_avg_mb_sec** (float) — average bandwidth in MB/sec (receiver)
+        - **bw_peak_mb_sec** (float) — peak bandwidth in MB/sec (max of sender & receiver)
+    """
+    result = host.run(f"cat {log_file} 2>/dev/null || echo ''", check=False)
+    output = result.stdout
+
+    data = {
+        'bw_avg_mb_sec': 0.0,
+        'bw_peak_mb_sec': 0.0,
+    }
+
+    # Format with ``iperf3 -f m``:
+    #   [  5]   0.00-10.00  sec   112 MBytes  94.0 Mbits/sec  receiver
+    for line in output.split('\n'):
+        if 'receiver' in line:
+            parts = line.split()
+            for i, p in enumerate(parts):
+                if p == 'Mbits/sec' and i > 0:
+                    bw_mbits = float(parts[i - 1])
+                    data['bw_avg_mb_sec'] = bw_mbits / 8.0
+                    data['bw_peak_mb_sec'] = bw_mbits / 8.0
+            break
+
+    # Sender line may have a higher value — use as peak
+    for line in output.split('\n'):
+        if 'sender' in line and 'Mbits/sec' in line:
+            parts = line.split()
+            for i, p in enumerate(parts):
+                if p == 'Mbits/sec' and i > 0:
+                    data['bw_peak_mb_sec'] = max(
+                        data['bw_peak_mb_sec'],
+                        float(parts[i - 1]) / 8.0,
+                    )
+            break
+
+    return data
+
+
+def _parse_perf_stat_text(text) -> dict:
     """Parse raw perf stat output text and return a dict of found metrics.
 
     Only metrics that appear in the output are included in the dict.
@@ -199,7 +251,7 @@ def parse_perf_stat_text(text):
     return metrics
 
 
-def parse_perf_stat(host, log_file):
+def parse_perf_stat_output(host, log_file) -> dict:
     """Parse perf stat output from a remote file and extract metric values.
 
     Args:
@@ -207,10 +259,10 @@ def parse_perf_stat(host, log_file):
         log_file: Path to the perf stat output log file
 
     Returns:
-        Dictionary containing parsed metrics (same keys as :func:`parse_perf_stat_text`)
+        Dictionary containing parsed metrics (same keys as :func:`_parse_perf_stat_text`)
     """
     result = host.run(f"cat {log_file} 2>/dev/null || echo ''")
-    metrics = parse_perf_stat_text(result.stdout)
+    metrics = _parse_perf_stat_text(result.stdout)
     # Backward compatibility: ensure all expected keys exist with 0 default
     for key in ('cycles', 'instructions', 'cache_references', 'cache_misses',
                 'context_switches', 'time_elapsed', 'user_time', 'sys_time'):
@@ -218,7 +270,7 @@ def parse_perf_stat(host, log_file):
     return metrics
 
 
-def calculate_derived_metrics(metrics, pingpong_time=0.0):
+def calculate_derived_metrics(metrics, pingpong_time=0.0) -> dict:
     """Calculate derived metrics from raw perf data.
 
     Args:
@@ -254,7 +306,7 @@ def calculate_derived_metrics(metrics, pingpong_time=0.0):
     return derived
 
 
-def parse_perf_report(host, data_file):
+def parse_perf_report(host, data_file) -> list:
     """Parse perf report output and extract hotspot functions.
 
     Args:
@@ -298,7 +350,7 @@ def parse_perf_report(host, data_file):
     return hotspots
 
 
-def print_hotspot_report(hotspots, title):
+def print_hotspot_report(hotspots, title) -> None:
     """Print formatted hotspot function report.
 
     Args:
