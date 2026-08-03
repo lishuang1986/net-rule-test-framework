@@ -8,6 +8,7 @@ on:
       - 'conftest.py'
       - 'pytest.ini'
       - 'requirements.txt'
+      - 'scripts/**'
   pull_request:
     branches: [ "main", "master" ]
     paths:
@@ -15,13 +16,14 @@ on:
       - 'conftest.py'
       - 'pytest.ini'
       - 'requirements.txt'
+      - 'scripts/**'
   workflow_dispatch:
 
 jobs:
   test-core:
     runs-on: ubuntu-latest
     container:
-      image: ubuntu:22.04
+      image: ubuntu:24.04
       options: --privileged
     steps:
       - name: Checkout code
@@ -33,10 +35,7 @@ jobs:
           python-version: '3.10'
 
       - name: Install dependencies
-        run: |
-          apt-get update
-          apt-get install -y python3-pip iproute2 iputils-ping iptables nftables cgroup-tools
-          pip install pytest scipy
+        run: bash scripts/setup.sh
 
       - name: Run tests with netns infra
         run: |
