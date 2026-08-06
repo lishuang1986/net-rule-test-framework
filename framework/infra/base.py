@@ -18,22 +18,29 @@ class BaseInfra(ABC):
 
 class NetnsNode(Node):
     """Base class for netns nodes, provides common run() implementation"""
-    def __init__(self, infra, name: str, tag: str):
+    def __init__(self, infra, tag: str):
         self._infra = infra
-        self._name = name
         self._tag = tag
 
     def run(
         self, cmd: str, check: bool = True, expect: str = "passed", silent: bool = False
     ) -> subprocess.CompletedProcess[str]:
-        physical_ns = self._infra._logical_to_physical[self._name]
-        full_cmd = f"ip netns exec {physical_ns} {cmd}"
+        physical_ns = self._infra._logical_to_physical[self._tag]
+        full_cmd = (
+            f"ip netns exec {physical_ns} bash << 'CMDEOF'\n"
+            f"{cmd}\n"
+            f"CMDEOF"
+        )
         result = self._execute(full_cmd, tag=self._tag, silent=silent)
         return self._check_result(result, cmd, check, expect)
 
     def popen(self, cmd: str) -> subprocess.Popen[str]:
-        physical_ns = self._infra._logical_to_physical[self._name]
-        full_cmd = f"ip netns exec {physical_ns} {cmd}"
+        physical_ns = self._infra._logical_to_physical[self._tag]
+        full_cmd = (
+            f"ip netns exec {physical_ns} bash << 'CMDEOF'\n"
+            f"{cmd}\n"
+            f"CMDEOF"
+        )
         if self.__class__.verbose:
             print(f"[{self._tag}] $ {full_cmd} &")
         return subprocess.Popen(
@@ -58,23 +65,30 @@ class NetnsNode(Node):
 
 class VrfNode(Node):
     """Base class for VRF nodes, executes commands via ip vrf exec"""
-    def __init__(self, infra, name: str, tag: str):
+    def __init__(self, infra, tag: str):
         self._infra = infra
-        self._name = name
         self._tag = tag
 
     def run(
         self, cmd: str, check: bool = True, expect: str = "passed", silent: bool = False
     ) -> subprocess.CompletedProcess[str]:
         # Get VRF name (assuming infra has _logical_to_physical mapping)
-        vrf_name = self._infra._logical_to_physical[self._name]
-        full_cmd = f"ip vrf exec {vrf_name} {cmd}"
+        vrf_name = self._infra._logical_to_physical[self._tag]
+        full_cmd = (
+            f"ip vrf exec {vrf_name} bash << 'CMDEOF'\n"
+            f"{cmd}\n"
+            f"CMDEOF"
+        )
         result = self._execute(full_cmd, tag=self._tag, silent=silent)
         return self._check_result(result, cmd, check, expect)
 
     def popen(self, cmd: str) -> subprocess.Popen[str]:
-        vrf_name = self._infra._logical_to_physical[self._name]
-        full_cmd = f"ip vrf exec {vrf_name} {cmd}"
+        vrf_name = self._infra._logical_to_physical[self._tag]
+        full_cmd = (
+            f"ip vrf exec {vrf_name} bash << 'CMDEOF'\n"
+            f"{cmd}\n"
+            f"CMDEOF"
+        )
         if self.__class__.verbose:
             print(f"[{self._tag}] $ {full_cmd} &")
         return subprocess.Popen(
@@ -99,9 +113,8 @@ class VrfNode(Node):
 
 class HostNode(Node):
     """Base class for local host nodes, executes commands directly (no netns)"""
-    def __init__(self, infra, name: str, tag: str):
+    def __init__(self, infra, tag: str):
         self._infra = infra
-        self._name = name
         self._tag = tag
 
     def run(
@@ -140,15 +153,14 @@ class LibvirtVMNode(Node):
     - sshpass installed on host for SSH automation
     """
 
-    def __init__(self, infra, name: str, tag: str):
+    def __init__(self, infra, tag: str):
         self._infra = infra
-        self._name = name
         self._tag = tag
 
     def run(
         self, cmd: str, check: bool = True, expect: str = "passed", silent: bool = False
     ) -> subprocess.CompletedProcess[str]:
-        ip = self._infra._logical_to_ip[self._name]
+        ip = self._infra._logical_to_ip[self._tag]
         ssh_user = self._infra.ssh_user
         ssh_password = self._infra.ssh_password
         full_cmd = f"sshpass -p '{ssh_password}' ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null {ssh_user}@{ip} '{cmd}'"
@@ -156,7 +168,7 @@ class LibvirtVMNode(Node):
         return self._check_result(result, cmd, check, expect)
 
     def popen(self, cmd: str) -> subprocess.Popen[str]:
-        ip = self._infra._logical_to_ip[self._name]
+        ip = self._infra._logical_to_ip[self._tag]
         ssh_user = self._infra.ssh_user
         ssh_password = self._infra.ssh_password
         full_cmd = f"sshpass -p '{ssh_password}' ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null {ssh_user}@{ip} '{cmd}'"
@@ -176,7 +188,7 @@ class LibvirtVMNode(Node):
             src: Source path on the host
             dst: Destination path on this VM
         """
-        ip = self._infra._logical_to_ip[self._name]
+        ip = self._infra._logical_to_ip[self._tag]
         ssh_user = self._infra.ssh_user
         ssh_password = self._infra.ssh_password
         cmd = (

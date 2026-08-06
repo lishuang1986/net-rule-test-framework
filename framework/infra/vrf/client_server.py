@@ -11,9 +11,12 @@ from ..base import BaseInfra, VrfNode
 class VrfClientServerInfra(ClientServerTopo, BaseInfra):
     """VRF-based Client-Server topology"""
 
+    CLIENT_TAG = "Client"
+    SERVER_TAG = "Server"
+
     class _ClientNode(Client, VrfNode):
         def __init__(self, infra):
-            VrfNode.__init__(self, infra, "client", "Client")
+            VrfNode.__init__(self, infra, infra.CLIENT_TAG)
 
         def get_ipv4(self) -> str:
             return "10.0.0.2"
@@ -26,7 +29,7 @@ class VrfClientServerInfra(ClientServerTopo, BaseInfra):
 
     class _ServerNode(Server, VrfNode):
         def __init__(self, infra):
-            VrfNode.__init__(self, infra, "server", "Server")
+            VrfNode.__init__(self, infra, infra.SERVER_TAG)
 
         def get_ipv4(self) -> str:
             return "10.0.0.1"
@@ -56,8 +59,6 @@ class VrfClientServerInfra(ClientServerTopo, BaseInfra):
         return self._server
 
     def setup(self) -> None:
-        client_name = "client"
-        server_name = "server"
         client_iface = self._client.get_iface()
         server_iface = self._server.get_iface()
 
@@ -65,7 +66,7 @@ class VrfClientServerInfra(ClientServerTopo, BaseInfra):
         subprocess.run(f"ip link del {client_iface}", shell=True, stderr=subprocess.DEVNULL)
 
         # Create VRF devices
-        for logical_node in [client_name, server_name]:
+        for logical_node in [self.CLIENT_TAG, self.SERVER_TAG]:
             vrf_name = f"{self.prefix}_{logical_node}"
             table_id = self._next_table
             self._next_table += 1
@@ -74,8 +75,8 @@ class VrfClientServerInfra(ClientServerTopo, BaseInfra):
             subprocess.run(f"ip link set {vrf_name} up", shell=True, check=True)
             self._logical_to_physical[logical_node] = vrf_name
 
-        client_vrf = self._logical_to_physical[client_name]
-        server_vrf = self._logical_to_physical[server_name]
+        client_vrf = self._logical_to_physical[self.CLIENT_TAG]
+        server_vrf = self._logical_to_physical[self.SERVER_TAG]
 
         # Create veth pairs directly with final names (no rename needed)
         subprocess.run(f"ip link add {client_iface} type veth peer name {server_iface}", shell=True, check=True)
