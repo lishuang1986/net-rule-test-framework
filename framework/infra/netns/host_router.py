@@ -13,9 +13,13 @@ from ..base import BaseInfra, HostNode, NetnsNode
 class NetnsHostRouterInfra(RouterTopo, BaseInfra):
     """Router topology with router on host (netns 0) and client/server in netns"""
 
+    CLIENT_TAG = "Client"
+    SERVER_TAG = "Server"
+    ROUTER_TAG = "Router"
+
     class _ClientNode(Client, NetnsNode):
         def __init__(self, infra):
-            NetnsNode.__init__(self, infra, "client", "Client")
+            NetnsNode.__init__(self, infra, infra.CLIENT_TAG)
 
         def get_ipv4(self) -> str:
             return "192.168.1.2"
@@ -28,7 +32,7 @@ class NetnsHostRouterInfra(RouterTopo, BaseInfra):
 
     class _RouterNode(Router, HostNode):
         def __init__(self, infra):
-            HostNode.__init__(self, infra, "router", "Router")
+            HostNode.__init__(self, infra, infra.ROUTER_TAG)
 
         def get_ipv4_to_client(self) -> str:
             return "192.168.1.1"
@@ -50,7 +54,7 @@ class NetnsHostRouterInfra(RouterTopo, BaseInfra):
 
     class _ServerNode(Server, NetnsNode):
         def __init__(self, infra):
-            NetnsNode.__init__(self, infra, "server", "Server")
+            NetnsNode.__init__(self, infra, infra.SERVER_TAG)
 
         def get_ipv4(self) -> str:
             return "192.168.2.2"
@@ -92,26 +96,23 @@ class NetnsHostRouterInfra(RouterTopo, BaseInfra):
             if self._firewalld_was_enabled:
                 subprocess.run(["systemctl", "stop", "firewalld"], check=True)
 
-        client_name = "client"
-        server_name = "server"
-
         # Only create client and server netns (no router netns)
-        for logical_node in [client_name, server_name]:
+        for logical_node in [self.CLIENT_TAG, self.SERVER_TAG]:
             physical_name = f"{self.prefix}_{logical_node}"
             subprocess.run(f"ip netns add {physical_name}", shell=True, check=True)
             self._logical_to_physical[logical_node] = physical_name
 
         # Create veth from host: host side = r2c, peer in client ns = eth0
-        self._create_veth_to_host(client_name,
+        self._create_veth_to_host(self.CLIENT_TAG,
                                   self._router.get_iface_to_client(),
                                   self._client.get_iface())
         # Create veth from host: host side = r2s, peer in server ns = eth0
-        self._create_veth_to_host(server_name,
+        self._create_veth_to_host(self.SERVER_TAG,
                                   self._router.get_iface_to_server(),
                                   self._server.get_iface())
 
-        client_ns = self._logical_to_physical[client_name]
-        server_ns = self._logical_to_physical[server_name]
+        client_ns = self._logical_to_physical[self.CLIENT_TAG]
+        server_ns = self._logical_to_physical[self.SERVER_TAG]
 
         # Configure client
         subprocess.run(f"ip netns exec {client_ns} ip link set {self._client.get_iface()} up", shell=True, check=True)

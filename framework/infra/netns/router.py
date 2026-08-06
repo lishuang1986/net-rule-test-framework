@@ -11,9 +11,13 @@ from ..base import BaseInfra, NetnsNode
 class NetnsRouterInfra(RouterTopo, BaseInfra):
     """Netns-based Router topology"""
 
+    CLIENT_TAG = "Client"
+    ROUTER_TAG = "Router"
+    SERVER_TAG = "Server"
+
     class _ClientNode(Client, NetnsNode):
         def __init__(self, infra):
-            NetnsNode.__init__(self, infra, "client", "Client")
+            NetnsNode.__init__(self, infra, infra.CLIENT_TAG)
 
         def get_ipv4(self) -> str:
             return "192.168.1.2"
@@ -26,7 +30,7 @@ class NetnsRouterInfra(RouterTopo, BaseInfra):
 
     class _RouterNode(Router, NetnsNode):
         def __init__(self, infra):
-            NetnsNode.__init__(self, infra, "router", "Router")
+            NetnsNode.__init__(self, infra, infra.ROUTER_TAG)
 
         def get_ipv4_to_client(self) -> str:
             return "192.168.1.1"
@@ -48,7 +52,7 @@ class NetnsRouterInfra(RouterTopo, BaseInfra):
 
     class _ServerNode(Server, NetnsNode):
         def __init__(self, infra):
-            NetnsNode.__init__(self, infra, "server", "Server")
+            NetnsNode.__init__(self, infra, infra.SERVER_TAG)
 
         def get_ipv4(self) -> str:
             return "192.168.2.2"
@@ -81,23 +85,19 @@ class NetnsRouterInfra(RouterTopo, BaseInfra):
         return self._server
 
     def setup(self) -> None:
-        client_name = "client"
-        router_name = "router"
-        server_name = "server"
-
-        for logical_node in [client_name, router_name, server_name]:
+        for logical_node in [self.CLIENT_TAG, self.ROUTER_TAG, self.SERVER_TAG]:
             physical_name = f"{self.prefix}_{logical_node}"
             subprocess.run(f"ip netns add {physical_name}", shell=True, check=True)
             self._logical_to_physical[logical_node] = physical_name
 
-        self._create_veth(client_name, router_name,
+        self._create_veth(self.CLIENT_TAG, self.ROUTER_TAG,
                           self._client.get_iface(), self._router.get_iface_to_client())
-        self._create_veth(router_name, server_name,
+        self._create_veth(self.ROUTER_TAG, self.SERVER_TAG,
                           self._router.get_iface_to_server(), self._server.get_iface())
 
-        client_ns = self._logical_to_physical[client_name]
-        router_ns = self._logical_to_physical[router_name]
-        server_ns = self._logical_to_physical[server_name]
+        client_ns = self._logical_to_physical[self.CLIENT_TAG]
+        router_ns = self._logical_to_physical[self.ROUTER_TAG]
+        server_ns = self._logical_to_physical[self.SERVER_TAG]
 
         subprocess.run(f"ip netns exec {client_ns} ip addr add {self._client.get_ipv4()}/24 dev {self._client.get_iface()}", shell=True, check=True)
         subprocess.run(f"ip netns exec {client_ns} ip -6 addr add {self._client.get_ipv6()}/64 dev {self._client.get_iface()}", shell=True, check=True)

@@ -30,38 +30,40 @@ class LibvirtClientServerInfra(ClientServerTopo, BaseInfra):
 
     # VM configuration
     BASE_IMAGE = "/var/lib/libvirt/images/fedora.qcow2"
-    VM_NAMES = {"client": "rdma-client", "server": "rdma-server"}
-    VM_DISKS = {"client": "/var/lib/libvirt/images/client.img", "server": "/var/lib/libvirt/images/server.img"}
+    CLIENT_TAG = "Client"
+    SERVER_TAG = "Server"
+    VM_NAMES = {CLIENT_TAG: "rdma-client", SERVER_TAG: "rdma-server"}
+    VM_DISKS = {CLIENT_TAG: "/var/lib/libvirt/images/client.img", SERVER_TAG: "/var/lib/libvirt/images/server.img"}
     VM_MEMORY = 2048
     VM_VCPUS = 2
 
     # Concrete implementation of Client node
     class _ClientNode(Client, LibvirtVMNode):
         def __init__(self, infra):
-            LibvirtVMNode.__init__(self, infra, "client", "Client")
+            LibvirtVMNode.__init__(self, infra, infra.CLIENT_TAG)
 
         def get_ipv4(self) -> str:
-            return self._infra._logical_to_ip[self._name]
+            return self._infra._logical_to_ip[self._tag]
 
         def get_ipv6(self) -> str:
-            return self._infra._logical_to_ipv6[self._name]
+            return self._infra._logical_to_ipv6[self._tag]
 
         def get_iface(self) -> str:
-            return self._infra._logical_to_iface[self._name]
+            return self._infra._logical_to_iface[self._tag]
 
     # Concrete implementation of Server node
     class _ServerNode(Server, LibvirtVMNode):
         def __init__(self, infra):
-            LibvirtVMNode.__init__(self, infra, "server", "Server")
+            LibvirtVMNode.__init__(self, infra, infra.SERVER_TAG)
 
         def get_ipv4(self) -> str:
-            return self._infra._logical_to_ip[self._name]
+            return self._infra._logical_to_ip[self._tag]
 
         def get_ipv6(self) -> str:
-            return self._infra._logical_to_ipv6[self._name]
+            return self._infra._logical_to_ipv6[self._tag]
 
         def get_iface(self) -> str:
-            return self._infra._logical_to_iface[self._name]
+            return self._infra._logical_to_iface[self._tag]
 
     def __init__(self):
         self.prefix = str(uuid.uuid4())[:8]
@@ -417,8 +419,8 @@ class LibvirtClientServerInfra(ClientServerTopo, BaseInfra):
     def _setup_ipv6(self):
         """Setup temporary IPv6 addresses on VMs (lost after reboot)"""
         ipv6_addrs = {
-            "client": "2001:db8:1::2/64",
-            "server": "2001:db8:1::1/64"
+            "Client": "2001:db8:1::2/64",
+            "Server": "2001:db8:1::1/64"
         }
         for node_name, vm_name in self.VM_NAMES.items():
             node = getattr(self, node_name.capitalize())

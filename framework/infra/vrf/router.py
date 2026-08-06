@@ -13,9 +13,13 @@ from ..base import BaseInfra, VrfNode
 class VrfRouterInfra(RouterTopo, BaseInfra):
     """VRF-based Router topology"""
 
+    CLIENT_TAG = "Client"
+    ROUTER_TAG = "Router"
+    SERVER_TAG = "Server"
+
     class _ClientNode(Client, VrfNode):
         def __init__(self, infra):
-            VrfNode.__init__(self, infra, "client", "Client")
+            VrfNode.__init__(self, infra, infra.CLIENT_TAG)
 
         def get_ipv4(self) -> str:
             return "10.0.1.2"
@@ -28,7 +32,7 @@ class VrfRouterInfra(RouterTopo, BaseInfra):
 
     class _RouterNode(Router, VrfNode):
         def __init__(self, infra):
-            VrfNode.__init__(self, infra, "router", "Router")
+            VrfNode.__init__(self, infra, infra.ROUTER_TAG)
 
         def get_ipv4_to_client(self) -> str:
             return "10.0.1.1"
@@ -50,7 +54,7 @@ class VrfRouterInfra(RouterTopo, BaseInfra):
 
     class _ServerNode(Server, VrfNode):
         def __init__(self, infra):
-            VrfNode.__init__(self, infra, "server", "Server")
+            VrfNode.__init__(self, infra, infra.SERVER_TAG)
 
         def get_ipv4(self) -> str:
             return "10.0.2.2"
@@ -87,10 +91,6 @@ class VrfRouterInfra(RouterTopo, BaseInfra):
         return self._server
 
     def setup(self) -> None:
-        client_name = "client"
-        router_name = "router"
-        server_name = "server"
-
         # Stop firewalld if it is enabled, to avoid interference with tests
         if shutil.which("systemctl") is not None:
             ret = subprocess.run(["systemctl", "is-enabled", "firewalld"],
@@ -109,7 +109,7 @@ class VrfRouterInfra(RouterTopo, BaseInfra):
         subprocess.run(f"ip link del {self._router.get_iface_to_server()}", shell=True, stderr=subprocess.DEVNULL)
 
         # Create VRF devices
-        for logical_node in [client_name, router_name, server_name]:
+        for logical_node in [self.CLIENT_TAG, self.ROUTER_TAG, self.SERVER_TAG]:
             vrf_name = f"{self.prefix}_{logical_node}"
             table_id = self._next_table
             self._next_table += 1
@@ -119,9 +119,9 @@ class VrfRouterInfra(RouterTopo, BaseInfra):
             self._logical_to_physical[logical_node] = vrf_name
             self._logical_to_table[logical_node] = table_id
 
-        client_vrf = self._logical_to_physical[client_name]
-        router_vrf = self._logical_to_physical[router_name]
-        server_vrf = self._logical_to_physical[server_name]
+        client_vrf = self._logical_to_physical[self.CLIENT_TAG]
+        router_vrf = self._logical_to_physical[self.ROUTER_TAG]
+        server_vrf = self._logical_to_physical[self.SERVER_TAG]
 
         # Create veth pairs directly with final names (no rename needed)
         # Pair 1: client <-> router
@@ -155,8 +155,8 @@ class VrfRouterInfra(RouterTopo, BaseInfra):
         subprocess.run(f"ip vrf exec {router_vrf} sysctl -w net.ipv6.conf.all.forwarding=1", shell=True, check=True)
 
         # Add default routes
-        client_table = self._logical_to_table[client_name]
-        server_table = self._logical_to_table[server_name]
+        client_table = self._logical_to_table[self.CLIENT_TAG]
+        server_table = self._logical_to_table[self.SERVER_TAG]
         subprocess.run(f"ip route add default via {self._router.get_ipv4_to_client()} dev {self._client.get_iface()} table {client_table}", shell=True, check=True)
         subprocess.run(f"ip route add default via {self._router.get_ipv4_to_server()} dev {self._server.get_iface()} table {server_table}", shell=True, check=True)
         subprocess.run(f"ip -6 route add default via {self._router.get_ipv6_to_client()} dev {self._client.get_iface()} table {client_table}", shell=True, check=True)

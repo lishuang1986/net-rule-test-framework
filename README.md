@@ -105,24 +105,14 @@ Supported backends:
 
 ### System Packages
 
-```bash
-# Fedora / RHEL / CentOS
-sudo dnf install -y python3-pip libcgroup-tools iproute-tc iptables nftables \
-    tcpdump wireshark \
-    libibverbs-utils librdmacm-utils infiniband-diags
-
-# Ubuntu / Debian
-sudo apt-get update
-sudo apt-get install -y python3-pip cgroup-tools iproute2 iptables nftables iputils-ping \
-    tcpdump tshark \
-    libibverbs-utils librdmacm-utils infiniband-diags
-```
-
-Or run the setup script which handles both distributions:
+Install all required system packages with the setup script:
 
 ```bash
 ./scripts/setup.sh
 ```
+
+The script is primarily tested on **Fedora/RHEL/CentOS**; **Ubuntu/Debian** is
+supported and exercised via GitHub CI.
 
 > **RoCEv2 / RDMA tests** require Libvirt VMs. The framework automatically installs RDMA packages (`libibverbs-utils`, `librdmacm-utils`, `perftest`, etc.) inside the VMs via `virt-customize`. The host packages listed above are for running diagnostics on the host side.
 

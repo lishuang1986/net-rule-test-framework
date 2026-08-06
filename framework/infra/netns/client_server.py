@@ -11,9 +11,12 @@ from ..base import BaseInfra, NetnsNode
 class NetnsClientServerInfra(ClientServerTopo, BaseInfra):
     """Netns-based Client-Server topology"""
 
+    CLIENT_TAG = "Client"
+    SERVER_TAG = "Server"
+
     class _ClientNode(Client, NetnsNode):
         def __init__(self, infra):
-            NetnsNode.__init__(self, infra, "client", "Client")
+            NetnsNode.__init__(self, infra, infra.CLIENT_TAG)
 
         def get_ipv4(self) -> str:
             return "192.168.100.2"
@@ -26,7 +29,7 @@ class NetnsClientServerInfra(ClientServerTopo, BaseInfra):
 
     class _ServerNode(Server, NetnsNode):
         def __init__(self, infra):
-            NetnsNode.__init__(self, infra, "server", "Server")
+            NetnsNode.__init__(self, infra, infra.SERVER_TAG)
 
         def get_ipv4(self) -> str:
             return "192.168.100.1"
@@ -54,8 +57,6 @@ class NetnsClientServerInfra(ClientServerTopo, BaseInfra):
         return self._server
 
     def setup(self) -> None:
-        client_name = "client"
-        server_name = "server"
         client_ipv4 = self._client.get_ipv4()
         client_ipv6 = self._client.get_ipv6()
         server_ipv4 = self._server.get_ipv4()
@@ -63,24 +64,27 @@ class NetnsClientServerInfra(ClientServerTopo, BaseInfra):
         client_iface = self._client.get_iface()
         server_iface = self._server.get_iface()
 
-        for logical_node in [client_name, server_name]:
+        for logical_node in [self.CLIENT_TAG, self.SERVER_TAG]:
             physical_name = f"{self.prefix}_{logical_node}"
             subprocess.run(f"ip netns add {physical_name}", shell=True, check=True)
             self._logical_to_physical[logical_node] = physical_name
 
-        self._create_veth(client_name, server_name, client_iface, server_iface)
+        client_ns = self._logical_to_physical[self.CLIENT_TAG]
+        server_ns = self._logical_to_physical[self.SERVER_TAG]
 
-        client_ns = self._logical_to_physical[client_name]
-        server_ns = self._logical_to_physical[server_name]
+        subprocess.run(
+            f"ip netns exec {client_ns} ip link add {client_iface} type veth peer name {server_iface} netns {server_ns}",
+            shell=True, check=True)
+        self.veths.append((client_iface, server_iface))
 
         subprocess.run(f"ip netns exec {client_ns} ip addr add {client_ipv4}/24 dev {client_iface}", shell=True, check=True)
-        subprocess.run(f"ip netns exec {client_ns} ip addr add {client_ipv6}/64 dev {client_iface}", shell=True, check=True)
-        subprocess.run(f"ip netns exec {client_ns} ip link set {client_iface} up", shell=True, check=True)
-        subprocess.run(f"ip netns exec {client_ns} ip link set lo up", shell=True, check=True)
 
         subprocess.run(f"ip netns exec {server_ns} ip addr add {server_ipv4}/24 dev {server_iface}", shell=True, check=True)
         subprocess.run(f"ip netns exec {server_ns} ip addr add {server_ipv6}/64 dev {server_iface}", shell=True, check=True)
+        subprocess.run(f"ip netns exec {client_ns} ip addr add {client_ipv6}/64 dev {client_iface}", shell=True, check=True)
         subprocess.run(f"ip netns exec {server_ns} ip link set {server_iface} up", shell=True, check=True)
+        subprocess.run(f"ip netns exec {client_ns} ip link set {client_iface} up", shell=True, check=True)
+        subprocess.run(f"ip netns exec {client_ns} ip link set lo up", shell=True, check=True)
         subprocess.run(f"ip netns exec {server_ns} ip link set lo up", shell=True, check=True)
 
         self._health_check()
@@ -90,16 +94,6 @@ class NetnsClientServerInfra(ClientServerTopo, BaseInfra):
             subprocess.run(f"ip link del {veth}", shell=True, stderr=subprocess.DEVNULL)
         for physical_ns in self._logical_to_physical.values():
             subprocess.run(f"ip netns del {physical_ns}", shell=True, stderr=subprocess.DEVNULL)
-
-    def _create_veth(self, node_a: str, node_b: str, iface_a: str, iface_b: str):
-        phys_a = self._logical_to_physical[node_a]
-        phys_b = self._logical_to_physical[node_b]
-
-        subprocess.run(
-            f"ip netns exec {phys_a} ip link add {iface_a} type veth peer name {iface_b} netns {phys_b}",
-            shell=True, check=True)
-
-        self.veths.append((iface_a, iface_b))
 
     def _health_check(self):
         self._client._wait_for_ipv6_dad()
