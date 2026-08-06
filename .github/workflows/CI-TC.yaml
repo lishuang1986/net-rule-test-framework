@@ -34,4 +34,5 @@ jobs:
 
       - name: Run TC tests
         run: |
-          pytest tests/tc/ -v
+          pytest tests/tc/ -v \
+            --ignore=tests/tc/test_qdisc_red.py

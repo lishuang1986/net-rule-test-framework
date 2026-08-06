@@ -62,7 +62,7 @@ def test_ib_write_bw_ipv6(rocev2_env):
         rocev2_env.Client.run("cat /tmp/ib_write_bw_client_ipv6.log")
 
 
-def test_ib_write_bw_bench_by_mtu(rocev2_env):
+def test_ib_write_bw_bench_by_MTU(rocev2_env):
     """Benchmark ib_write_bw bandwidth with different active MTU sizes (fixed 1MB message)."""
     client_ip = rocev2_env.Client.get_ipv4()
     server_ip = rocev2_env.Server.get_ipv4()
@@ -282,7 +282,7 @@ def test_ib_write_bw_bench_netem_loss(rocev2_env):
     print(f"{'=' * 70}")
 
 
-def test_ib_write_bw_bench_netem_loss_qp(rocev2_env):
+def test_ib_write_bw_bench_netem_loss_QP(rocev2_env):
     """Benchmark ib_write_bw bandwidth with 0.1% netem loss, sweeping QP depth.
 
     Under a fixed 0.1% packet loss, sweeps QP counts from 1 to 128 to find

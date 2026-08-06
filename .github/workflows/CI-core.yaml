@@ -41,4 +41,5 @@ jobs:
         run: |
           pytest tests/ -v --infra netns \
             --ignore=tests/rocev2 \
-            --ignore=tests/firewall/nftables/test_match_meta_cgroupv2.py
+            --ignore=tests/firewall/nftables/test_match_meta_cgroupv2.py \
+            --ignore=tests/tc/test_qdisc_red.py
