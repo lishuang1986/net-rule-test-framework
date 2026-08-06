@@ -25,7 +25,11 @@ fi
 # Refresh package index (apt-get only; dnf does this automatically)
 if [ "$PKG_MGR" = "apt-get" ]; then
     $SUDO apt-get update
+    $SUDO apt-get install -y software-properties-common
+    $SUDO add-apt-repository universe -y
+    $SUDO apt-get update
     export DEBIAN_FRONTEND=noninteractive
+    apt-cache search ncat
 fi
 
 # pip (may already be present but ensure it's installed)
@@ -42,6 +46,7 @@ fi
 if [ "$PKG_MGR" = "dnf" ]; then
     $PKG_INSTALL \
         iputils \
+	nmap-ncat \
         iproute-tc \
         iptables \
         nftables \
@@ -50,6 +55,7 @@ if [ "$PKG_MGR" = "dnf" ]; then
 elif [ "$PKG_MGR" = "apt-get" ]; then
     $PKG_INSTALL \
         iputils-ping \
+	ncat \
         iproute2 \
         iptables \
         nftables \

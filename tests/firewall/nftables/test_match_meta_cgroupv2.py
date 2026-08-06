@@ -36,6 +36,7 @@ def test_match_meta_cgroupv2_ipv4(host_router_env):
 
     # 3. Verify baseline connectivity before drop rule takes effect
     infra.Router.run(f"ping -c 1 -W 2 {server_ipv4}")
+    infra.Router.run(f"cgexec -g cpu,memory:test ping -c 3 -W 2 {server_ipv4}")
 
     # 4. Add drop rule with cgroupv2 match
     infra.Router.run(
