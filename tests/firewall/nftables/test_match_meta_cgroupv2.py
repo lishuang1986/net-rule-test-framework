@@ -63,4 +63,5 @@ def test_match_meta_cgroupv2_ipv4(host_router_env):
         "echo $pid > /sys/fs/cgroup/cgroup.procs 2>/dev/null; "
         "done < /sys/fs/cgroup/test/cgroup.procs"
     )
-    infra.Router.run("rmdir /sys/fs/cgroup/test")
+    infra.Router.run("cgdelete -r -g cpu,memory:test")
+    #infra.Router.run("rmdir /sys/fs/cgroup/test")
