@@ -48,11 +48,12 @@ def test_tcp_ecn_handshake_client_server(client_server_env):
         )
         time.sleep(1)
 
-        # Step 3: Client connects and sends "hello world"
+        # Step 3: Client sends "hello world" three times over one connection,
+        # one packet per send (sleep forces each write to be flushed separately)
         infra.Client.run(
-            f"echo 'hello world' | ncat -4 --send-only {server_ip} 8080"
+            f"for i in 1 2 3; do echo 'hello world'; [ $i -lt 3 ] && sleep 1; done "
+            f"| ncat -4 --send-only {server_ip} 8080"
         )
-        time.sleep(1)
 
         # Step 4: Stop tcpdump and observe ECN negotiation
         tcpdump_proc.terminate()
@@ -62,6 +63,7 @@ def test_tcp_ecn_handshake_client_server(client_server_env):
 
         infra.Client.run(r"tshark -r /tmp/ecn_handshake.pcap | grep '\[SYN, ECE, CWR\]'")
         infra.Client.run(r"tshark -r /tmp/ecn_handshake.pcap | grep '\[SYN, ACK, ECE\]'")
+        infra.Client.run("tshark -r /tmp/ecn_handshake.pcap")
         infra.Client.run("tshark -r /tmp/ecn_handshake.pcap -O ip")
 
     finally:
@@ -90,7 +92,8 @@ def _run_iperf3_tcp(infra, server_ip: str, port: int,
     try:
         client_proc = infra.Client.popen(f"iperf3 -c {server_ip} -p {port} -f m -P 8")
         time.sleep(5)
-        infra.Client.run(f"ss -ti | grep -E 'rtt:|{port}'", check=False)
+        #infra.Client.run(f"ss -ti | grep -E 'rtt:|{port}'", check=False)
+        infra.Client.run(f"ss -tinp '( sport = :{port} or dport = :{port} )'", check=False)
         if tcpdump_filter is not None:
             infra.Server.run(f"rm -f {pcap_path}")
             infra.Server.run(

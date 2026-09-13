@@ -24,12 +24,11 @@ fi
 
 # Refresh package index (apt-get only; dnf does this automatically)
 if [ "$PKG_MGR" = "apt-get" ]; then
+    export DEBIAN_FRONTEND=noninteractive
     $SUDO apt-get update
     $SUDO apt-get install -y software-properties-common
     $SUDO add-apt-repository universe -y
     $SUDO apt-get update
-    export DEBIAN_FRONTEND=noninteractive
-    apt-cache search ncat
 fi
 
 # pip (may already be present but ensure it's installed)
@@ -74,9 +73,16 @@ fi
 if [ "$PKG_MGR" = "dnf" ]; then
     $PKG_INSTALL \
         libibverbs-utils \
-        librdmacm-utils \
-        infiniband-diags
+        librdmacm-utils 
+else
+    $PKG_INSTALL \
+        ibverbs-utils \
+        rdmacm-utils
+    $SUDO add-apt-repository ppa:canonical-nvidia/doca-basic-stable -y
+    $SUDO apt-get update
 fi
+$PKG_INSTALL mlnx-tools
+$PKG_INSTALL infiniband-diags
 
 echo "==> Installing Python dependencies..."
 python3 -m pip install -r requirements.txt
