@@ -3,7 +3,6 @@
 import os
 import pytest
 import time
-from tests.rocev2.utils import parse_perf_stat_output, parse_perf_report, print_hotspot_report
 
 pytestmark = [pytest.mark.rocev2]
 
