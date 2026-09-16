@@ -31,13 +31,19 @@ Without this abstraction, testing a single TC rule across netns, VRF, and VMs wo
 
 The project currently includes the following test suites:
 
-- **TC** — Traffic Control rule tests (`tests/tc/`)<br>
-  Example: u32 match validation, demonstrating cross-backend rule testing
-- **Firewall** — iptables and nftables rule tests (`tests/firewall/`)<br>
-  Examples: drop, conntrack, cgroupv2 meta matching — verifying the framework's rule-type extensibility
-- **RoCEv2** — RDMA/RoCEv2 experiments and tests (`tests/rocev2/`) — **primary focus**<br>
-  Protocol behavior, performance methodology, and deep inspection — across transports, completion modes, and benchmarks.<br>
-  Reuses the Client-Server topology on libvirt VMs with SoftRoCE (RXE). Netns/VRF backends do not support RDMA. See [README](tests/rocev2/README.md) for details.
+- **TC** — Traffic Control rule tests (`tests/tc/`)
+  - `test_filter_u32.py` — u32 classifier matching ICMP/ICMPv6 echo request (egress) and reply (ingress) on a `clsact` qdisc, over IPv4 and IPv6
+  - `test_qdisc_netem.py` — netem delay on the client-server and router topologies; loss-rate validation (10%–0.01%) with a one-sample T-test
+  - `test_qdisc_ets.py` — ETS qdisc with shared/strict bands, driven by DSCP-classified netperf streams
+  - `test_qdisc_red.py` — RED qdisc: drop vs. mark (ECN) vs. baseline bandwidth, plus TCP ECN handshake negotiation
+
+- **Firewall** — iptables and nftables rule tests (`tests/firewall/`)
+  - `iptables/test_drop.py` — ICMP drop via `INPUT` (client-server) and `FORWARD` (router)
+  - `nftables/test_match_meta_cgroupv2.py` — nftables `socket cgroupv2` match dropping ICMP echo-request on the host-router `OUTPUT` chain
+
+- **RoCEv2** — RDMA/RoCEv2 experiments and tests (`tests/rocev2/`) — **primary focus**
+  - Protocol behavior, performance methodology, and deep inspection — across transports, completion modes, and benchmarks.
+  - Reuses the Client-Server topology on libvirt VMs with SoftRoCE (RXE); the netns/VRF backends do not support RDMA. See [README](tests/rocev2/README.md) for details.
 
 ## Topology
 
@@ -103,6 +109,16 @@ Supported backends:
 
 ## Prerequisites
 
+### Python
+
+It is recommended to use a virtual environment:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
 ### System Packages
 
 Install all required system packages with the setup script:
@@ -115,16 +131,6 @@ The script is primarily tested on **Fedora/RHEL/CentOS**; **Ubuntu/Debian** is
 supported and exercised via GitHub CI.
 
 > **RoCEv2 / RDMA tests** require Libvirt VMs. The framework automatically installs RDMA packages (`libibverbs-utils`, `librdmacm-utils`, `perftest`, etc.) inside the VMs via `virt-customize`. The host packages listed above are for running diagnostics on the host side.
-
-### Python
-
-It is recommended to use a virtual environment:
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
 
 ## Quick Start
 
