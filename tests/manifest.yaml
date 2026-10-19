@@ -1,0 +1,44 @@
+# tests/manifest.yaml
+# Grouping: tests/<domain>/... directory + pytest marker
+
+domains:
+  firewall:
+    description: "iptables/nftables firewall rule tests (drop, meta cgroupv2 match)"
+    paths:
+      - tests/firewall/**
+    marker: netfilter
+    tests:
+      - "tests/firewall/iptables/test_drop.py::test_drop_icmp_client_server"
+      - "tests/firewall/iptables/test_drop.py::test_drop_icmp_router"
+      # NOTE: test_match_meta_cgroupv2_ipv4 is excluded -- cannot run in GitHub CI
+      # (see --ignore=tests/firewall/nftables/test_match_meta_cgroupv2.py in CI-core/CI-FW)
+
+  tc:
+    description: "Linux Traffic Control: qdisc (netem/ets) and filter (u32) tests"
+    paths:
+      - tests/tc/**
+    marker: tc
+    tests:
+      - "tests/tc/test_filter_u32.py::test_filter_u32_icmp_ipv4"
+      - "tests/tc/test_filter_u32.py::test_filter_u32_icmp_ipv6"
+      - "tests/tc/test_qdisc_ets.py::test_qdisc_ets_client_server[shared]"
+      - "tests/tc/test_qdisc_ets.py::test_qdisc_ets_client_server[strict]"
+      - "tests/tc/test_qdisc_netem.py::test_qdisc_netem_client_server"
+      - "tests/tc/test_qdisc_netem.py::test_qdisc_netem_on_router"
+      - "tests/tc/test_qdisc_netem.py::test_qdisc_netem_loss"
+      # NOTE: tests/tc/test_qdisc_red.py is excluded -- cannot run in GitHub CI
+      # (see --ignore=tests/tc/test_qdisc_red.py in CI-core/CI-TC)
+      # Removed: test_tcp_ecn_handshake_client_server
+      # Removed: test_qdisc_red_perf_comparison
+
+# Touching any of these forces a full run (LLM not consulted)
+critical_paths:
+  - "framework/"
+  - "conftest.py"
+  - "pytest.ini"
+  - "pyproject.toml"
+  - "requirements.txt"
+  - "Makefile"
+  - "scripts/"
+  - ".github/workflows/"
+  - "tests/manifest.yaml"

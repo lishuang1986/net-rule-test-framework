@@ -24,8 +24,6 @@ class ClientServerTopo(ABC):
             iface = node.get_iface()
             rdma_dev = node.get_iface_rdma()
             node.run("modprobe rdma_rxe")
-            node.run(
-                f"rdma link add {rdma_dev} type rxe netdev {iface} 2>/dev/null || true"
-            )
-            node.run("rdma link show -d")
+            node.run(f"rdma link add {rdma_dev} type rxe netdev {iface}")
+            node.run("rdma link show")
             node.run("show_gids")

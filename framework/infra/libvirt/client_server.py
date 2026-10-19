@@ -308,7 +308,7 @@ class LibvirtClientServerInfra(ClientServerTopo, BaseInfra):
                 f"--vcpus {self.VM_VCPUS} "
                 f"--disk path={disk_path},format=qcow2 "
                 f"--import "
-                f"--network network=default,model=virtio "
+                f"--network network=default,model=virtio,mtu.size=9000 "
                 f"--graphics vnc "
                 f"--noautoconsole "
                 f"--osinfo detect=on,require=off"
