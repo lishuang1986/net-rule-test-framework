@@ -3,6 +3,7 @@
 [![Core CI](https://github.com/lishuang1986/net-rule-test-framework/actions/workflows/CI-core.yaml/badge.svg)](https://github.com/lishuang1986/net-rule-test-framework/actions/workflows/CI-core.yaml)
 [![TC CI](https://github.com/lishuang1986/net-rule-test-framework/actions/workflows/CI-TC.yaml/badge.svg)](https://github.com/lishuang1986/net-rule-test-framework/actions/workflows/CI-TC.yaml)
 [![FW CI](https://github.com/lishuang1986/net-rule-test-framework/actions/workflows/CI-FW.yaml/badge.svg)](https://github.com/lishuang1986/net-rule-test-framework/actions/workflows/CI-FW.yaml)
+[![AI CI](https://github.com/lishuang1986/net-rule-test-framework/actions/workflows/CI-AI.yaml/badge.svg)](https://github.com/lishuang1986/net-rule-test-framework/actions/workflows/CI-AI.yaml)
 
 **Write once. Run across netns, VRF, and VMs.**
 
