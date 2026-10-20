@@ -10,28 +10,60 @@ permissions:
 
 jobs:
   # ─────────────────────────────────────────────────────
-  # Use DeepSeek to select tests based on the diff
+  # Use DeepSeek to select tests based on the diff.
+  #
+  # Runs in the same container + same dependencies as `test`, so that
+  # `pytest --collect-only` sees the exact same import environment as
+  # execution. Without this, pick silently missed tests whose modules
+  # failed to import on the bare host runner.
+  #
+  # No --privileged: pick only runs Python + collect, not netns tests.
   # ─────────────────────────────────────────────────────
   pick:
     runs-on: ubuntu-latest
+    container:
+      image: ubuntu:24.04
     outputs:
       tests: ${{ steps.sel.outputs.tests }}
       reason: ${{ steps.sel.outputs.reason }}
       count: ${{ steps.sel.outputs.count }}
     steps:
+      - name: Install git
+        run: apt-get update && apt-get install -y git
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0          # Full history required for git diff origin/main
+
+      - name: Fetch base branch
+        run: |
+          git config --global --add safe.directory "$PWD"
+          BASE="${{ github.base_ref || 'main' }}"
+          git fetch origin "$BASE:refs/remotes/origin/$BASE"
+          git rev-parse "origin/$BASE"
+
+      # Pin to 3.10.16, NOT 3.10 (latest).
+      # 3.10.22 is built against OpenSSL 3.3, which Ubuntu 24.04 does not ship.
+      # Container has OpenSSL 3.0.x, so we need a Python built against 3.0.
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
-      - run: pip install pyyaml
+          python-version: '3.10.16'
+
+      - name: Verify Python SSL
+        run: python3 -c "import ssl; print(ssl.OPENSSL_VERSION)"
+
+      # Same dependency install as `test`, so collect() sees the same
+      # environment as execution. This is what fixes the "pick missed
+      # test_qdisc_netem.py" bug.
+      - name: Install dependencies
+        run: bash scripts/setup.sh
+
       - id: sel
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           BASE_REF: ${{ github.base_ref || 'main' }}
           PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
-        run: python scripts/select_tests.py
+        run: python3 scripts/select_tests.py
 
   # ─────────────────────────────────────────────────────
   # Run the AI-selected tests in the same environment as CI-core
@@ -46,9 +78,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Pin to 3.10.16, NOT 3.10 (latest).
+      # 3.10.22 is built against OpenSSL 3.3, which Ubuntu 24.04 does not ship.
+      # Container has OpenSSL 3.0.x, so we need a Python built against 3.0.
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.10.16'
+
+      - name: Verify Python SSL
+        run: python3 -c "import ssl; print(ssl.OPENSSL_VERSION)"
 
       - name: Install dependencies
         run: bash scripts/setup.sh
