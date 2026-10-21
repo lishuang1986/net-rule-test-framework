@@ -11,7 +11,7 @@ from framework.helpers import is_100_percent_loss
 
 
 @pytest.mark.netfilter
-def test_drop_icmp_client_server(client_server_env):
+def test_target_drop_icmp_client_server(client_server_env):
     """Verify iptables DROP on the server INPUT chain blocks ICMP.
 
     Adds an INPUT DROP rule for ICMP on the server, confirms the client's
@@ -27,7 +27,7 @@ def test_drop_icmp_client_server(client_server_env):
 
 
 @pytest.mark.netfilter
-def test_drop_icmp_router(router_env):
+def test_target_drop_icmp_router(router_env):
     """Verify iptables DROP on the router FORWARD chain blocks ICMP.
 
     Adds a FORWARD DROP rule for ICMP on the router, confirms the client's
