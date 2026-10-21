@@ -12,39 +12,31 @@ jobs:
   # ─────────────────────────────────────────────────────
   # Use DeepSeek to select tests based on the diff.
   #
-  # Runs in the same container + same dependencies as `test`, so that
+  # Runs with the same dependencies as `test`, so that
   # `pytest --collect-only` sees the exact same import environment as
   # execution. Without this, pick silently missed tests whose modules
   # failed to import on the bare host runner.
-  #
-  # No --privileged: pick only runs Python + collect, not netns tests.
   # ─────────────────────────────────────────────────────
   pick:
-    runs-on: ubuntu-latest
-    container:
-      image: ubuntu:24.04
+    runs-on: ubuntu-24.04
     outputs:
       tests: ${{ steps.sel.outputs.tests }}
       reason: ${{ steps.sel.outputs.reason }}
       count: ${{ steps.sel.outputs.count }}
     steps:
-      - name: Install git
-        run: apt-get update && apt-get install -y git
-
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0          # Full history required for git diff origin/main
 
       - name: Fetch base branch
         run: |
-          git config --global --add safe.directory "$PWD"
           BASE="${{ github.base_ref || 'main' }}"
           git fetch origin "$BASE:refs/remotes/origin/$BASE"
           git rev-parse "origin/$BASE"
 
       # Pin to 3.10.16, NOT 3.10 (latest).
       # 3.10.22 is built against OpenSSL 3.3, which Ubuntu 24.04 does not ship.
-      # Container has OpenSSL 3.0.x, so we need a Python built against 3.0.
+      # The runner ships OpenSSL 3.0.x, so we need a Python built against 3.0.
       - uses: actions/setup-python@v5
         with:
           python-version: '3.10.16'
@@ -71,16 +63,13 @@ jobs:
   test:
     needs: pick
     if: needs.pick.result == 'success' && needs.pick.outputs.tests != '[]'
-    runs-on: ubuntu-latest
-    container:
-      image: ubuntu:24.04
-      options: --privileged
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
       # Pin to 3.10.16, NOT 3.10 (latest).
       # 3.10.22 is built against OpenSSL 3.3, which Ubuntu 24.04 does not ship.
-      # Container has OpenSSL 3.0.x, so we need a Python built against 3.0.
+      # The runner ships OpenSSL 3.0.x, so we need a Python built against 3.0.
       - uses: actions/setup-python@v5
         with:
           python-version: '3.10.16'
@@ -90,6 +79,9 @@ jobs:
 
       - name: Install dependencies
         run: bash scripts/setup.sh
+
+      - name: Load legacy xtables kernel modules
+        run: sudo modprobe ip_tables ip6_tables iptable_filter ip6table_filter
 
       - name: Run selected tests
         shell: bash
@@ -102,7 +94,7 @@ jobs:
           )
           echo "Running ${#TESTS[@]} test(s):"
           printf '  %s\n' "${TESTS[@]}"
-          pytest -v --infra netns "${TESTS[@]}"
+          sudo "$(command -v python)" -m pytest -v --infra netns "${TESTS[@]}"
 
   # ─────────────────────────────────────────────────────
   # Post the AI selection result as a PR comment

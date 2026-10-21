@@ -47,7 +47,9 @@ if [ "$PKG_MGR" = "dnf" ]; then
         iputils \
 	nmap-ncat \
         iproute-tc \
+        iperf3 \
         iptables \
+        iptables-legacy \
         nftables \
         tcpdump \
         wireshark
@@ -56,6 +58,7 @@ elif [ "$PKG_MGR" = "apt-get" ]; then
         iputils-ping \
 	ncat \
         iproute2 \
+        iperf3 \
         iptables \
         nftables \
         tcpdump \
