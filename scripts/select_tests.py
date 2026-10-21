@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
-Select pytest tests to run based on git diff, using DeepSeek's LLM.
+Select pytest test FILES to run based on git diff, using DeepSeek's LLM.
 
-Test lists are collected dynamically from pytest at runtime -- only the
-domain-to-path mapping is declared in tests/manifest.yaml.
+Test files are discovered via pytest --collect-only. For each file, the
+module docstring + per-test docstrings are extracted with `ast` and sent
+to the LLM as a compact description. Only `exclude` and `critical_paths`
+are declared in tests/manifest.yaml.
 
 Env vars:
   BASE_REF          base branch to diff against (default: main)
@@ -11,9 +13,9 @@ Env vars:
   PR_LABELS         comma-separated PR labels (optional, for escape hatches)
 
 Exit: 0 on success. Exits non-zero if DEEPSEEK_API_KEY is missing but an
-LLM call is required, or if pytest collection fails -- silently skipping
-tests is worse than a red CI.
+LLM call is required, or if pytest collection fails.
 """
+import ast
 import json
 import os
 import subprocess
@@ -61,49 +63,27 @@ def load_manifest():
 
 # ------------------------------------------------------------- test discovery
 
-def _strip_glob(path):
-    """'tests/tc/**' -> 'tests/tc';  'tests/tc/*.py' -> 'tests/tc'."""
-    p = path
-    for suffix in ("/**", "/*"):
-        if p.endswith(suffix):
-            p = p[: -len(suffix)]
-            break
-    return p.rstrip("/")
-
-
-def collect_all_tests(domains):
-    """Run pytest --collect-only on all domain paths; return list of node IDs."""
-    dirs = []
-    for info in domains.values():
-        for p in info.get("paths", []):
-            base = _strip_glob(p)
-            if base:
-                dirs.append(base)
-    dirs = sorted(set(dirs))
-
-    if not dirs:
-        print("WARN: no collect paths derived from domains", file=sys.stderr)
-        return []
+def collect_all_tests(exclude):
+    """Run pytest --collect-only on tests/, excluding files in `exclude`."""
+    ignore_args = []
+    for p in exclude or []:
+        if "::" not in p:
+            ignore_args.append(f"--ignore={p}")
 
     proc = subprocess.run(
         ["pytest", "--collect-only", "-q", "-o", "addopts=",
-         "--continue-on-collection-errors"] + dirs,
+         "--continue-on-collection-errors"] + ignore_args + ["tests/"],
         capture_output=True, text=True,
     )
 
-    # pytest exit codes: 0=ok, 5=no tests collected, 2=collection error.
-    # Anything other than 0/5 means we did not see the full picture -- fail
-    # loudly instead of silently returning a partial list.
     if proc.returncode not in (0, 5):
         print(f"ERROR: pytest collect exited {proc.returncode}", file=sys.stderr)
-        # pytest prints "ERROR collecting ..." lines to *stdout*, not stderr.
         err_lines = [
             l for l in proc.stdout.splitlines()
             if "ERROR" in l or "ModuleNotFound" in l or "ImportError" in l
         ]
         for l in err_lines[-30:]:
             print(l, file=sys.stderr)
-        # Also surface stderr in case something went wrong there too.
         if proc.stderr.strip():
             print("--- pytest stderr ---", file=sys.stderr)
             print(proc.stderr[-2000:], file=sys.stderr)
@@ -112,86 +92,111 @@ def collect_all_tests(domains):
     tests = []
     for line in proc.stdout.splitlines():
         s = line.strip()
-        # node IDs always contain '::'; this also filters out tree-format noise
         if "::" in s and not s.startswith("<"):
             tests.append(s)
     return tests
 
 
-def build_domain_tests(domains, exclude):
-    """Map each collected test to a domain by path prefix; drop excluded ones."""
-    all_tests = collect_all_tests(domains)
-    exclude = exclude or []
-
-    def is_excluded(nid):
-        for p in exclude:
-            p = p.rstrip("/")
-            if nid == p or nid.startswith(p + "::") or nid.startswith(p + "/"):
-                return True
-        return False
-
-    result = {name: [] for name in domains}
-    unmatched = []
-
+def files_from_tests(all_tests):
+    """Unique file paths in collection order."""
+    seen = set()
+    out = []
     for nid in all_tests:
-        if is_excluded(nid):
+        f = nid.split("::", 1)[0]
+        if f not in seen:
+            seen.add(f)
+            out.append(f)
+    return out
+
+
+# ------------------------------------------------------- inline doc descriptors
+
+def _clean(doc):
+    """Collapse a docstring into one line."""
+    if not doc:
+        return ""
+    return " ".join(doc.split())
+
+
+def extract_descriptor(path):
+    """Parse a test file and return {module: str, tests: [(name, desc)]}.
+
+    Reads only docstrings via AST -- no imports, no execution.
+    """
+    try:
+        src = Path(path).read_text()
+        tree = ast.parse(src)
+    except Exception as e:
+        print(f"WARN: cannot parse {path}: {e}", file=sys.stderr)
+        return {"module": "", "tests": []}
+
+    module_doc = _clean(ast.get_docstring(tree))
+    tests = []
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if node.name.startswith("test_"):
+                tests.append((node.name, _clean(ast.get_docstring(node))))
+    return {"module": module_doc, "tests": tests}
+
+
+def build_file_descriptions(candidate_files, yaml_fallback):
+    """Return a dict: path -> compact description block (str)."""
+    out = {}
+    for f in candidate_files:
+        info = extract_descriptor(f)
+        if not info["module"] and not info["tests"]:
+            # No inline docs at all -> fall back to yaml or just the path
+            fallback = yaml_fallback.get(f, "")
+            out[f] = fallback
             continue
-        matched = False
-        for name, info in domains.items():
-            for p in info.get("paths", []):
-                base = _strip_glob(p)
-                if base and (nid == base or nid.startswith(base + "/")):
-                    result[name].append(nid)
-                    matched = True
-                    break
-            if matched:
-                break
-        if not matched:
-            unmatched.append(nid)
 
-    if unmatched:
-        print(f"INFO: {len(unmatched)} collected test(s) not in any domain (ignored):",
-              file=sys.stderr)
-        for t in unmatched[:10]:
-            print(f"  {t}", file=sys.stderr)
-        if len(unmatched) > 10:
-            print(f"  ... and {len(unmatched) - 10} more", file=sys.stderr)
-
-    return result
+        lines = []
+        if info["module"]:
+            lines.append(f"    module: {info['module']}")
+        if info["tests"]:
+            lines.append("    tests:")
+            for name, desc in info["tests"]:
+                if desc:
+                    lines.append(f"      - {name}: {desc}")
+                else:
+                    lines.append(f"      - {name}")
+        out[f] = "\n".join(lines)
+    return out
 
 
 # ------------------------------------------------------------------ LLM logic
 
-def llm_pick_domains(diff, domains, test_counts):
-    """Ask the LLM which domains are affected.
+def llm_pick_files(diff, candidate_files, file_descriptions):
+    """Ask the LLM which test FILES to run.
 
-    Caller (decide) guarantees DEEPSEEK_API_KEY is set.
+    Caller (decide_files) guarantees DEEPSEEK_API_KEY is set.
     """
-    valid_names = list(domains.keys())
-    domain_summary = "\n".join(
-        f"- {name}\n"
-        f"    description: {info['description']}\n"
-        f"    code paths: {info.get('paths', [])}\n"
-        f"    test count: {test_counts.get(name, 0)}"
-        for name, info in domains.items()
-    )
+    file_lines = []
+    for f in candidate_files:
+        desc = file_descriptions.get(f, "")
+        if desc:
+            file_lines.append(f"- {f}\n{desc}")
+        else:
+            file_lines.append(f"- {f}")
+    file_list = "\n".join(file_lines)
 
     truncated_diff = diff[:DIFF_MAX_CHARS]
 
     prompt = (
         "You are a CI test selector for a network testing framework "
         "(iptables/nftables firewall, Linux Traffic Control / tc).\n\n"
-        "Below is the git diff. Decide which test domains MUST run.\n\n"
-        "Available domains:\n"
-        f"{domain_summary}\n\n"
+        "Below is the git diff. Decide which test FILES must run.\n\n"
+        "Available test files (descriptions come from the files' own "
+        "module and function docstrings):\n"
+        f"{file_list}\n\n"
         "Rules:\n"
-        f"- domain names MUST be exactly one of: {valid_names}\n"
-        "- If a change is under tests/<domain>/, that domain MUST run.\n"
-        "- If a change affects shared behavior across domains, include all affected.\n"
-        "- When in doubt, INCLUDE the domain (a missed regression is worse than extra tests).\n"
+        "- Return exact file paths as listed above; do not invent paths.\n"
+        "- If a change is inside a test file, that file MUST run.\n"
+        "- If a change affects shared behavior used by a test file, include it.\n"
+        "- When in doubt, INCLUDE the file (a missed regression is worse than extra tests).\n"
         "- Docs/comments only -> return an empty list.\n\n"
         'Return ONLY JSON of the form:\n'
-        '{"domains": ["<name>", ...], "reason": "<one short sentence>"}\n\n'
+        '{"files": ["<path>", ...], "reason": "<one short sentence>"}\n\n'
         "Diff:\n"
         "<diff>\n"
         f"{truncated_diff}\n"
@@ -218,21 +223,19 @@ def llm_pick_domains(diff, domains, test_counts):
 
 # --------------------------------------------------------------------- decide
 
-def decide(domains, critical_paths, changed, diff, test_counts):
-    """Return (chosen_domain_names, reason)."""
+def decide_files(candidate_files, file_descriptions, critical_paths, changed, diff):
+    """Return (chosen_files, reason)."""
     if "run-all-tests" in LABELS:
-        return list(domains), "label: run-all-tests"
+        return list(candidate_files), "label: run-all-tests"
 
     hit = [f for f in changed
            if any(f.startswith(p) or p in f for p in critical_paths)]
     if hit:
-        return list(domains), f"critical path: {hit[:3]}"
+        return list(candidate_files), f"critical path: {hit[:3]}"
 
     if not diff.strip():
         return [], "empty diff"
 
-    # From here on, we need the LLM. A missing key means AI-driven selection
-    # is broken; fail loudly instead of silently falling back to ALL.
     if not DEEPSEEK_API_KEY:
         print("ERROR: DEEPSEEK_API_KEY is not set, but this PR requires "
               "LLM-based test selection.", file=sys.stderr)
@@ -241,50 +244,51 @@ def decide(domains, critical_paths, changed, diff, test_counts):
         sys.exit(1)
 
     try:
-        picked = llm_pick_domains(diff, domains, test_counts)
-        chosen = [d for d in picked.get("domains", []) if d in domains]
-        unknown = [d for d in picked.get("domains", []) if d not in domains]
+        picked = llm_pick_files(diff, candidate_files, file_descriptions)
+        valid = set(candidate_files)
+        chosen = [f for f in picked.get("files", []) if f in valid]
+        unknown = [f for f in picked.get("files", []) if f not in valid]
         if unknown:
-            print(f"WARN: LLM returned unknown domains: {unknown}", file=sys.stderr)
+            print(f"WARN: LLM returned unknown files: {unknown}", file=sys.stderr)
         return chosen, picked.get("reason", "")
     except Exception as e:
-        # Transient failure (network, API 5xx, timeout): fall back to ALL
-        # so the PR is not blocked, but log loudly.
         print(f"WARN: LLM call failed ({e}); falling back to ALL", file=sys.stderr)
-        return list(domains), "llm error fallback"
+        return list(candidate_files), "llm error fallback"
 
 
 # ----------------------------------------------------------------------- main
 
 def main():
     m = load_manifest()
-    domains = m.get("domains", {})
-    critical = m.get("critical_paths", [])
-    exclude = m.get("exclude", [])
+    yaml_descriptions = m.get("files", {}) or {}   # optional fallback
+    exclude = m.get("exclude", []) or []
+    critical = m.get("critical_paths", []) or []
 
-    if not domains:
-        sys.exit("FATAL: no domains in manifest")
+    all_tests = collect_all_tests(exclude)
+    candidate_files = files_from_tests(all_tests)
+    if not candidate_files:
+        sys.exit("FATAL: no test files collected")
 
-    domain_tests = build_domain_tests(domains, exclude)
-    test_counts = {name: len(tests) for name, tests in domain_tests.items()}
-    for name, count in test_counts.items():
-        print(f"INFO: domain '{name}': {count} test(s)", file=sys.stderr)
+    file_descriptions = build_file_descriptions(candidate_files, yaml_descriptions)
+
+    print(f"INFO: {len(candidate_files)} candidate file(s), "
+          f"{len(all_tests)} test(s) total", file=sys.stderr)
+    for f in candidate_files:
+        print(f"  {f}", file=sys.stderr)
 
     changed = changed_files()
     diff = git_diff()
 
-    chosen, reason = decide(domains, critical, changed, diff, test_counts)
+    chosen_files, reason = decide_files(
+        candidate_files, file_descriptions, critical, changed, diff,
+    )
 
-    selected = []
-    for d in chosen:
-        selected.extend(domain_tests[d])
-
-    seen = set()
-    selected = [t for t in selected if not (t in seen or seen.add(t))]
+    chosen_set = set(chosen_files)
+    selected = [nid for nid in all_tests if nid.split("::", 1)[0] in chosen_set]
 
     print(f"INFO: base_ref={BASE_REF}", file=sys.stderr)
     print(f"INFO: changed files={len(changed)}", file=sys.stderr)
-    print(f"INFO: chosen domains={chosen}", file=sys.stderr)
+    print(f"INFO: chosen files={chosen_files}", file=sys.stderr)
     print(f"INFO: reason={reason}", file=sys.stderr)
     print(f"INFO: selected {len(selected)} test(s)", file=sys.stderr)
 

@@ -1,5 +1,11 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 Li Shuang
+"""TC ETS qdisc tests.
+
+Verify the ETS qdisc in shared and strict bandwidth-sharing modes on the
+client-server topology, using netperf flows with different DSCP values.
+"""
+
 import time
 import re
 import pytest
@@ -20,6 +26,12 @@ import pytest
     ], id="strict"),
 ])
 def test_qdisc_ets_client_server(client_server_env, tc_cmds):
+    """Verify netperf traffic distribution across ETS bands.
+
+    Configures a tbf root qdisc with an ETS child in either shared or strict
+    mode (parameterized), runs four netperf flows with different DSCP values,
+    and prints the class statistics after the test.
+    """
     infra = client_server_env
 
     iface = infra.Client.get_iface()

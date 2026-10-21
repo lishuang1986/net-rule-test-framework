@@ -1,5 +1,11 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 Li Shuang
+"""TC netem qdisc tests.
+
+Verify netem delay and packet-loss emulation on the client and the router,
+and compare observed loss rates with the configured values.
+"""
+
 import re
 import pytest
 from scipy import stats
@@ -8,6 +14,11 @@ from framework.helpers import get_avg_rtt
 
 @pytest.mark.tc
 def test_qdisc_netem_client_server(client_server_env):
+    """Verify netem delay on the client adds ~100ms RTT.
+
+    Adds a netem qdisc with 100ms delay on the client interface, pings the
+    server, and asserts the average RTT is at least 100ms.
+    """
     infra = client_server_env
     
     iface = infra.Client.get_iface()
@@ -24,6 +35,11 @@ def test_qdisc_netem_client_server(client_server_env):
 
 @pytest.mark.tc
 def test_qdisc_netem_on_router(router_env):
+    """Verify netem delay on the router adds ~100ms RTT.
+
+    Adds a netem qdisc with 100ms delay on the router interface facing the
+    server, pings from client to server, and asserts avg RTT >= 100ms.
+    """
     infra = router_env
     
     iface = infra.Router.get_iface_to_server()

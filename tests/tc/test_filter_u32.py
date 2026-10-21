@@ -1,12 +1,18 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 Li Shuang
+"""TC u32 classifier tests.
+
+Verify that u32 filters on the clsact qdisc match ICMP/ICMPv6 packets
+in both ingress and egress directions and drop them.
+"""
+
 import pytest
 from framework.helpers import is_100_percent_loss
 
 @pytest.mark.tc
 def test_filter_u32_icmp_ipv4(client_server_env):
     """
-    Test TC u32 matcher matching ICMP packets and dropping them
+    Test TC u32 matcher matching ICMP packets and dropping them.
     Includes: pass when no match, egress match drop, ingress match drop
     """
     infra = client_server_env
@@ -86,7 +92,7 @@ def test_filter_u32_icmp_ipv4(client_server_env):
 @pytest.mark.tc
 def test_filter_u32_icmp_ipv6(client_server_env):
     """
-    Test TC u32 matcher matching IPv6 ICMPv6 packets and dropping them
+    Test TC u32 matcher matching IPv6 ICMPv6 packets and dropping them.
     Includes: pass when no match, egress match drop, ingress match drop
     """
     infra = client_server_env
