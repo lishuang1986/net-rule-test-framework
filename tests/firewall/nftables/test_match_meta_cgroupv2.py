@@ -1,5 +1,11 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 Li Shuang
+"""nftables cgroupv2 match tests.
+
+Verify that an nftables rule matching a socket's cgroupv2 path drops
+ICMP echo-requests originating from processes in that cgroup.
+"""
+
 import pytest
 from framework.helpers import is_100_percent_loss
 

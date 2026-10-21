@@ -1,5 +1,11 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 Li Shuang
+"""TC RED qdisc and TCP ECN tests.
+
+Verify the RED qdisc in drop and ECN-mark modes on the client-server
+topology, and the end-to-end TCP ECN handshake negotiation.
+"""
+
 import time
 import pytest
 

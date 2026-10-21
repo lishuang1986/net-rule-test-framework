@@ -1,25 +1,14 @@
 # tests/manifest.yaml
-# Domains are defined by path; the actual test list is collected at runtime
-# via `pytest --collect-only`. Add new tests freely -- no need to update this file.
+# File descriptions are read from module/function docstrings automatically.
+# The `files:` block below is an OPTIONAL fallback for files that have
+# no docstrings; it is NOT required and should be kept minimal.
+files: {}
 
-domains:
-  firewall:
-    description: "iptables/nftables firewall rule tests (drop, meta cgroupv2 match)"
-    paths:
-      - tests/firewall/**
-
-  tc:
-    description: "Linux Traffic Control: qdisc (netem/ets) and filter (u32) tests"
-    paths:
-      - tests/tc/**
-
-# Tests that cannot run in GitHub CI. Both file paths and full node IDs work.
-# A file path excludes all tests in that file.
 exclude:
+  - tests/rocev2/
   - tests/firewall/nftables/test_match_meta_cgroupv2.py
   - tests/tc/test_qdisc_red.py
 
-# Touching any of these forces a full run (LLM not consulted)
 critical_paths:
   - "framework/"
   - "conftest.py"
