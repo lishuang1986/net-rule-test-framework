@@ -4,6 +4,7 @@ on:
   push:
     branches: [ "main", "master" ]
     paths:
+      - '.github/workflows/CI-core.yaml'
       - 'framework/**'
       - 'conftest.py'
       - 'pytest.ini'
@@ -12,6 +13,7 @@ on:
   pull_request:
     branches: [ "main", "master" ]
     paths:
+      - '.github/workflows/CI-core.yaml'
       - 'framework/**'
       - 'conftest.py'
       - 'pytest.ini'
@@ -21,17 +23,14 @@ on:
 
 jobs:
   test-core:
-    runs-on: ubuntu-latest
-    container:
-      image: ubuntu:24.04
-      options: --privileged
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       # Pin to 3.10.16, NOT 3.10 (latest).
       # 3.10.22 is built against OpenSSL 3.3, which Ubuntu 24.04 does not ship.
-      # Container has OpenSSL 3.0.x, so we need a Python built against 3.0.
+      # Ubuntu 24.04 ships OpenSSL 3.0.x, so we need a Python built against 3.0.
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -43,9 +42,11 @@ jobs:
       - name: Install dependencies
         run: bash scripts/setup.sh
 
+      - name: Load legacy xtables kernel modules
+        run: sudo modprobe ip_tables ip6_tables iptable_filter ip6table_filter
+
       - name: Run tests with netns infra
         run: |
-          pytest tests/ -v --infra netns \
+          sudo "$(command -v python)" -m pytest tests/ -v --infra netns \
             --ignore=tests/rocev2 \
-            --ignore=tests/firewall/nftables/test_match_meta_cgroupv2.py \
-            --ignore=tests/tc/test_qdisc_red.py
+            --ignore=tests/firewall/nftables/test_match_meta_cgroupv2.py
