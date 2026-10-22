@@ -39,7 +39,8 @@ The project currently includes the following test suites:
   - `test_qdisc_red.py` — RED qdisc: drop vs. mark (ECN) vs. baseline bandwidth, plus TCP ECN handshake negotiation
 
 - **Firewall** — iptables and nftables rule tests (`tests/firewall/`)
-  - `iptables/test_drop.py` — ICMP drop via `INPUT` (client-server) and `FORWARD` (router)
+  - `iptables/test_target_drop.py` — ICMP/ICMPv6 DROP on `INPUT`/`OUTPUT` (client-server) and `FORWARD`/`PREROUTING`/`POSTROUTING` (router) via `iptables-legacy`/`ip6tables-legacy`
+  - `nftables/test_target_drop.py` — same DROP coverage via the `nft` binary, exercising `nf_tables` instead of the legacy `ip_tables`/`ip6_tables` modules
   - `nftables/test_match_meta_cgroupv2.py` — nftables `socket cgroupv2` match dropping ICMP echo-request on the host-router `OUTPUT` chain
 
 - **RoCEv2** — RDMA/RoCEv2 experiments and tests (`tests/rocev2/`) — **primary focus**
