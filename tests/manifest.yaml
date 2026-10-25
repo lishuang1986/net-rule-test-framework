@@ -1,8 +1,7 @@
 # tests/manifest.yaml
-# File descriptions are read from module/function docstrings automatically.
-# The `files:` block below is an OPTIONAL fallback for files that have
-# no docstrings; it is NOT required and should be kept minimal.
-files: {}
+# Test file descriptions come from module/function docstrings, extracted
+# at runtime with `ast`. Files without docstrings fall back to the bare
+# path in the LLM prompt -- so write docstrings.
 
 exclude:
   - tests/rocev2/

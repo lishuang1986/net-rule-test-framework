@@ -1,0 +1,72 @@
+# evaluation/cves.yaml
+# 每个条目 = 一个内核 CVE 的评测样本。
+# - id / url / subsystem: 用于抓取
+# - expected_tests / reasoning: 人工标注的标准答案，用于评测
+
+cves:
+  - id: CVE-2026-98235
+    url: https://lore.kernel.org/linux-cve-announce/2026100648-CVE-2026-98235-0b6f@gregkh/
+    subsystem: net/sched
+    expected_tests:
+      - tests/tc/test_filter_u32.py
+    reasoning: "net/sched: act_api: release tail references on DELACTION failure"
+
+  - id: CVE-2026-98104
+    url: https://lore.kernel.org/linux-cve-announce/2026092510-CVE-2026-98104-249e@gregkh/
+    subsystem: net/sched
+    expected_tests:
+      - tests/tc/test_filter_u32.py
+    reasoning: "net/sched: cls_u32: fix duplicate handle when node ID pool is exhausted"
+
+  - id: CVE-2026-74736
+    url: https://lore.kernel.org/linux-cve-announce/2026082656-CVE-2026-74736-d864@gregkh/
+    subsystem: net/sched
+    expected_tests: []
+    reasoning: "net/sched: cls_bpf: reject dev-bound programs bound to a different device"
+
+  - id: CVE-2025-37914
+    url: https://lore.kernel.org/linux-cve-announce/2025052000-CVE-2025-37914-1a4f@gregkh/
+    subsystem: net/sched
+    expected_tests:
+      - tests/tc/test_qdisc_ets.py
+    reasoning: "net_sched: ets: Fix double list add in class with netem as child qdisc"
+
+  - id: CVE-2022-49921
+    url: https://lore.kernel.org/linux-cve-announce/2025050108-CVE-2022-49921-e4fc@gregkh/
+    subsystem: net/sched
+    expected_tests:
+      - tests/tc/test_qdisc_red.py
+    reasoning: "net: sched: Fix use after free in red_enqueue()"
+
+  - id: CVE-2026-52984
+    url: https://lore.kernel.org/linux-cve-announce/2026062442-CVE-2026-52984-110c@gregkh/
+    subsystem: net/sched
+    expected_tests:
+      - tests/tc/test_qdisc_netem.py
+    reasoning: "net/sched: netem: fix queue limit check to include reordered packets"
+
+  - id: CVE-2026-90062
+    url: https://lore.kernel.org/linux-cve-announce/2026091705-CVE-2026-90062-e300@gregkh/
+    subsystem: netfilter
+    expected_tests:
+      - tests/firewall/nftables/test_target_drop.py
+    reasoning: "netfilter: nf_tables: move hardware offload step after building the chain blob"
+
+  - id: CVE-2026-72348
+    url: https://lore.kernel.org/linux-cve-announce/2026081511-CVE-2026-72348-e6e6@gregkh/
+    subsystem: netfilter
+    expected_tests: []
+    reasoning: "netfilter: ip6tables: mark malformed IPv6 extension headers for hotdrop"
+
+  - id: CVE-2026-64078
+    url: https://lore.kernel.org/linux-cve-announce/2026071914-CVE-2026-64078-ff87@gregkh/
+    subsystem: netfilter
+    expected_tests:
+      - tests/firewall/iptables/test_target_drop.py
+    reasoning: "netfilter: x_tables: add and use xtables_unregister_table_exit"
+
+  - id: CVE-2026-46101
+    url: https://lore.kernel.org/linux-cve-announce/2026052705-CVE-2026-46101-3102@gregkh/
+    subsystem: netfilter
+    expected_tests: []
+    reasoning: "netfilter: reject zero shift in nft_bitwise"

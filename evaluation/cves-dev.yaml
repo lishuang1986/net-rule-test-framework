@@ -1,0 +1,73 @@
+# evaluation/cves.yaml
+# 每个条目 = 一个内核 CVE 的评测样本。
+# - id / url / subsystem: 用于抓取
+# - expected_tests / reasoning: 人工标注的标准答案，用于评测
+
+cves:
+  - id: CVE-2026-98629
+    url: https://lore.kernel.org/linux-cve-announce/2026101843-CVE-2026-98629-a3dc@gregkh/
+    subsystem: net/sched
+    expected_tests:
+      - tests/tc/test_filter_u32.py
+    reasoning: "net/sched: cls_u32: fix manual hash table handle IDR aliasing"
+
+  - id: CVE-2026-98009
+    url: https://lore.kernel.org/linux-cve-announce/2026092524-CVE-2026-98009-8da6@gregkh/
+    subsystem: net/sched
+    expected_tests:
+      - tests/tc/test_qdisc_ets.py
+    reasoning: "net/sched: ets: clamp quantum in parse and fallback paths"
+
+  - id: CVE-2026-43496
+    url: https://lore.kernel.org/linux-cve-announce/2026052157-CVE-2026-43496-07e1@gregkh/
+    subsystem: net/sched
+    expected_tests:
+      - tests/tc/test_qdisc_red.py
+    reasoning: "net/sched: sch_red: Replace direct dequeue call with peek and qdisc_dequeue_peeked"
+
+  - id: CVE-2026-31675
+    url: https://lore.kernel.org/linux-cve-announce/2026042543-CVE-2026-31675-e5da@gregkh/
+    subsystem: net/sched
+    expected_tests:
+      - tests/tc/test_qdisc_netem.py
+    reasoning: "net/sched: sch_netem: fix out-of-bounds access in packet corruption"
+
+  - id: CVE-2026-90109
+    url: https://lore.kernel.org/linux-cve-announce/2026091715-CVE-2026-90109-e297@gregkh/
+    subsystem: net/sched
+    expected_tests: []
+    reasoning: "net: sched: fix 32-bit backlog wrap in gred, bfifo and plug enqueue"
+
+  - id: CVE-2026-22987
+    url: https://lore.kernel.org/linux-cve-announce/2026012350-CVE-2026-22987-8984@gregkh/
+    subsystem: net/sched
+    expected_tests:
+      - tests/tc/test_filter_u32.py
+    reasoning: "net/sched: act_api: avoid dereferencing ERR_PTR in tcf_idrinfo_destroy"
+
+  - id: CVE-2026-64079
+    url: https://lore.kernel.org/linux-cve-announce/2026071915-CVE-2026-64079-866e@gregkh/
+    subsystem: netfilter
+    expected_tests:
+      - tests/firewall/iptables/test_target_drop.py
+    reasoning: "netfilter: x_tables: allocate hook ops while under mutex"
+
+  - id: CVE-2026-74565
+    url: https://lore.kernel.org/linux-cve-announce/2026081553-CVE-2026-74565-74d6@gregkh/
+    subsystem: netfilter
+    expected_tests:
+      - tests/firewall/nftables/test_target_drop.py
+    reasoning: "netfilter: nf_tables: make nft_object rhltable per table"
+
+  - id: CVE-2023-53033
+    url: https://lore.kernel.org/linux-cve-announce/2025032721-CVE-2023-53033-9089@gregkh/
+    subsystem: netfilter
+    expected_tests:
+      - tests/firewall/nftables/test_target_drop.py
+    reasoning: "netfilter: nft_payload: incorrect arithmetics when fetching VLAN header bits"
+
+  - id: CVE-2026-72347
+    url: https://lore.kernel.org/linux-cve-announce/2026081511-CVE-2026-72347-6871@gregkh/
+    subsystem: net/sched
+    expected_tests: []
+    reasoning: "netfilter: xt_connmark: reject invalid shift parameters"

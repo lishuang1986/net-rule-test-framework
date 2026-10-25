@@ -20,12 +20,14 @@ clean:
 	@sudo find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
 	@sudo find . -type f -name "*.pyc" -delete 2>/dev/null || true
 	@sudo find . -type f -name "*.bak" -delete 2>/dev/null || true
+	@sudo find evaluation/ -type d -name "llm_traces" -exec rm -rf {} + 2>/dev/null || true
+	@sudo find evaluation/ -type f -name "last_run*.json" -delete 2>/dev/null || true
 	@echo "Done."
 
 # More thorough clean (includes reports, assets directory, etc., needs sudo)
 clean-all: clean
 	@echo "Removing reports and test artifacts..."
-	@sudo rm -rf assets report.html
+	@sudo rm -rf assets report.html evaluation/data
 	@echo "Done."
 
 # Run all tests (defaults to netns backend)
