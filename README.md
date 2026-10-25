@@ -189,6 +189,135 @@ That's it! The framework will automatically:
 
 **Note:** The image customization (`virt-customize`) runs only **once**. A marker file `.customized` will be created to skip future customizations.
 
+## CI
+
+Four GitHub Actions workflows guard the repository. The first three are
+path-filtered — they run only when files under their scope change. The
+fourth uses an LLM to decide which tests a PR needs.
+
+| Workflow | Trigger | Scope |
+|---|---|---|
+| `CI-core` | `framework/`, `conftest.py`, `pytest.ini`, `requirements.txt`, `scripts/` | Broad regression across all runnable suites |
+| `CI-FW` | `tests/firewall/**` | Firewall suite |
+| `CI-TC` | `tests/tc/**` | TC suite |
+| `CI-AI` | Every PR | LLM-selected subset of test files |
+
+### AI-driven test selection
+
+`CI-AI` runs [`scripts/select_tests.py`](scripts/select_tests.py) on every
+PR. The script:
+
+1. Collects all runnable tests via `pytest --collect-only` (honouring
+   `exclude` in [`tests/manifest.yaml`](tests/manifest.yaml)).
+2. Extracts each test file's module and per-test docstrings with `ast`
+   — no imports, no execution.
+3. Sends the PR diff plus those docstrings to an LLM, asking which test
+   **files** must run.
+4. Expands the selected files into pytest node IDs and feeds them to the
+   `test` job's dynamic matrix.
+
+The LLM provider is configured via environment variables
+(`LLM_ENDPOINT`, `LLM_MODEL`, `LLM_API_KEY`) — there is no built-in
+default. To switch providers, change the three vars in
+[`.github/workflows/CI-AI.yaml`](.github/workflows/CI-AI.yaml); no code
+changes are needed.
+
+**Escape hatches.** Three conditions bypass the LLM and force a full run:
+
+- A PR label named `run-all-tests`.
+- Any change to a path listed in `critical_paths` (shared infra such as
+  `framework/`, `conftest.py`, or the CI config itself).
+- An empty diff (no code change → no tests).
+
+**Failure policy.** If the LLM call fails (network, 5xx, timeout),
+`CI-AI` falls back to running the full suite. A missing LLM
+configuration, by contrast, fails the job outright — silently skipping
+tests is worse than a red CI.
+
+Trace logs (prompt, reasoning, response, token usage, cost) are written
+to `$LLM_TRACE_DIR`, defaulting to `/tmp/select_tests_llm` in CI.
+
+## Evaluating the AI Selector
+
+An LLM-based selector is only useful if its mistakes are measurable. The
+[`evaluation/`](evaluation/) directory contains a small, curated
+benchmark of real kernel CVEs with hand-annotated expected test files,
+plus the harness that scores the selector against them.
+
+### Why a benchmark
+
+Two failure modes matter for a test selector:
+
+- **Miss (low recall)** — a test that should have run did not. This is a
+  regression risk.
+- **Over-select (low precision)** — extra tests ran. This costs CI
+  minutes but is safe.
+
+The selector is tuned to prefer over-selection: a missed regression is
+worse than a few extra minutes. The benchmark quantifies both.
+
+### Dev / test split
+
+The CVE set is split into two files:
+
+| File | Purpose |
+|---|---|
+| [`evaluation/cves-dev.yaml`](evaluation/cves-dev.yaml) | Tuning set. Docstrings and prompts may be adjusted against it. |
+| [`evaluation/cves-test.yaml`](evaluation/cves-test.yaml) | Holdout set. Run once, record the numbers, do not tune against it. |
+
+If a change is made specifically to fix a case in the holdout set, that
+case moves into `cves-dev.yaml` and a fresh holdout is collected.
+Otherwise the reported holdout numbers are not honest.
+
+### Current results
+
+10 CVEs in each split, `deepseek-flash` at `temperature=0`, 3 runs:
+
+| Split | Recall | Precision |
+|---|---|---|
+| dev | 1.00 | 0.73 – 1.00 |
+| test (holdout) | 1.00 | 0.58 – 1.00 |
+
+Recall is 1.00 in every run — no test was ever missed. Precision varies
+because the model is non-deterministic at the margins: some CVEs touch
+shared code (`act_api.c`, `sch_fifo.c`) where several qdisc tests could
+plausibly be affected, and the model's judgement flips between runs. All
+false positives are intra-subsystem (an extra TC test, never a firewall
+test on a TC change).
+
+For comparison, `Qwen2.5-7B-Instruct` on the same prompts and the same
+holdout set scores recall 0.83 / precision 0.26. Its failures are
+systematic: without a reasoning step, it matches on keywords
+(`drop`, `mark`, `ICMP`) rather than on the affected kernel subsystem,
+and frequently picks firewall tests for TC CVEs.
+
+### Running the benchmark
+
+```bash
+export LLM_ENDPOINT="https://api.deepseek.com/chat/completions"
+export LLM_MODEL="deepseek-flash"
+export LLM_API_KEY="$DEEPSEEK_API_KEY"
+
+python3 evaluation/fetch_cves.py      # fetch and cache CVE data
+python3 evaluation/evaluate.py        # score the selector
+```
+
+`fetch_cves.py` caches one JSON per CVE under `evaluation/data/`;
+`evaluate.py` runs the selector against each CVE and reports
+precision/recall per split. Detailed per-CVE results land in
+`evaluation/last_run_dev.json` and `evaluation/last_run_test.json`.
+
+### Adding a CVE
+
+1. Append an entry to `evaluation/cves-dev.yaml` or
+   `evaluation/cves-test.yaml` with `id`, `url`, and `expected_tests`.
+2. Run `fetch_cves.py` to populate `evaluation/data/`.
+3. Run `evaluate.py`.
+
+Expected paths must match actual test files; `evaluate.py` does not
+validate this, so a typo in `expected_tests` will silently count as a
+miss. Use `pytest --collect-only` to confirm paths before committing.
+
 ## Extensibility
 
 Thanks to the layered design (Topology / Infrastructure separation), you can easily add new execution backends or rule types without changing existing test cases.
