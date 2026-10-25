@@ -10,12 +10,16 @@ permissions:
 
 jobs:
   # ─────────────────────────────────────────────────────
-  # Use DeepSeek to select tests based on the diff.
+  # Use an LLM to select tests based on the diff.
   #
   # Runs with the same dependencies as `test`, so that
   # `pytest --collect-only` sees the exact same import environment as
   # execution. Without this, pick silently missed tests whose modules
   # failed to import on the bare host runner.
+  #
+  # LLM provider is configured via env vars (no built-in default in the
+  # script). To switch provider, change LLM_ENDPOINT / LLM_MODEL /
+  # LLM_API_KEY here; nothing else in the workflow needs to change.
   # ─────────────────────────────────────────────────────
   pick:
     runs-on: ubuntu-24.04
@@ -52,7 +56,12 @@ jobs:
 
       - id: sel
         env:
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          # LLM provider (required by scripts/select_tests.py; no defaults).
+          LLM_ENDPOINT: "https://api.deepseek.com/chat/completions"
+          LLM_MODEL: "deepseek-flash"
+          LLM_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          # Keep traces out of the workspace; CI does not need to keep them.
+          LLM_TRACE_DIR: /tmp/select_tests_llm
           BASE_REF: ${{ github.base_ref || 'main' }}
           PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
         run: python3 scripts/select_tests.py
